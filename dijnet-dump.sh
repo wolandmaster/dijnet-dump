@@ -31,7 +31,7 @@ xpath() {
 }
 
 html2ascii() {
-  sed 's/&\([a-zA-Z]\)[a-zA-Z]*;/\1/g'
+  
 }
 
 dijnet() {
@@ -67,9 +67,10 @@ PROVIDERS=$(dijnet "control/szamla_search" | xpath '//select[@name="szlaszolgid"
 echo "${PROVIDERS}" | grep -o "value" | wc -w
 
 for ID in $(echo "${PROVIDERS}" | xpath '//option/@value' | sed 's/value="\([^"]*\)"/\1 /g'); do
-  PROVIDER=$(echo "${PROVIDERS}" | xpath "//option[@value=${ID}]/text()" | html2ascii)
+  PROVIDER=$(echo "${PROVIDERS}" | xpath "//option[@value=${ID}]/text()" | sed 's/&\([a-zA-Z]\)[a-zA-Z]*;/\1/g')
   INVOICES=$(dijnet "control/szamla_search_submit" "vfw_form=szamla_search_submit&vfw_coll=szamla_search_params&szlaszolgid=${ID}" \
-           | xpath '//table[contains(@class, "szamla_table")]/tbody/tr/td[1]/a/@href' | sed 's/href="\([^"]*\)"/\1 /g;s/\&amp;/\&/g;s/\/ekonto\/control\///g')
+           | xpath '//table[contains(@class, "szamla_table")]/tbody/tr/td[1]/a/@href' \
+           | sed 's/href="\([^"]*\)"/\1 /g;s/\&amp;/\&/g;s/\/ekonto\/control\///g')
   INVOICE_COUNT=$(echo "${INVOICES}" | wc -w)
   INVOICE_INDEX=1
   for INVOICE in ${INVOICES}; do
@@ -89,4 +90,3 @@ for ID in $(echo "${PROVIDERS}" | xpath '//option/@value' | sed 's/value="\([^"]
     ((INVOICE_INDEX++))
   done | progress
 done
-
