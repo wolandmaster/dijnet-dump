@@ -32,11 +32,7 @@ xpath() {
 
 html2ascii() {
   sed '
-    s/&aacute;/a/g; s/&Aacute;/A/g
-    s/&eacute;/e/g; s/&Eacute;/E/g
-    s/&iacute;/i/g; s/&Iacute;/I/g
-    s/&ucirc;\|&uacute;\|&uuml;/u/g; s/&Ucirc;\|&Uacute;\|&Uuml;/U/g
-    s/&otilde;\|&oacute;\|&ouml;/o/g; s/&Otilde;\|&Oacute;\|&Ouml;/O/g
+    s/&\([a-zA-Z]\)[a-zA-Z]*;/\1/g
   '
 }
 
