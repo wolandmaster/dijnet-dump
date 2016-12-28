@@ -31,9 +31,7 @@ xpath() {
 }
 
 html2ascii() {
-  sed '
-    s/&\([a-zA-Z]\)[a-zA-Z]*;/\1/g
-  '
+  sed 's/&\([a-zA-Z]\)[a-zA-Z]*;/\1/g'
 }
 
 dijnet() {
