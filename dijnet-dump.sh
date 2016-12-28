@@ -73,7 +73,7 @@ for ID in $(echo "${PROVIDERS}" | xpath '//option/@value' | sed 's/value="\([^"]
   INVOICE_COUNT=$(echo "${INVOICES}" | wc -w)
   INVOICE_INDEX=1
   for INVOICE in ${INVOICES}; do
-    dijnet "control/${INVOICE}" | grep -q 'href="szamla_letolt"' || die
+    dijnet "control/${INVOICE}" | iconv -f iso8859-2 -t utf-8 | grep -q 'href="szamla_letolt"' || die
     INVOICE_DOWNLOAD=$(dijnet "control/szamla_letolt")
     INVOICE_NUMBER=$(echo "${INVOICE_DOWNLOAD}" | xpath '//label[@class="title_next_s"]/text()' | sed 's/\//_/g;s/ //g')
     TARGET_FOLDER=$(echo "${PROVIDER}/${INVOICE_NUMBER}" | sed 's/ \+/_/g')
