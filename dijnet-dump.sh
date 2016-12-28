@@ -75,11 +75,12 @@ echo "${PROVIDERS}" | grep -o "value" | wc -w
 for ID in $(echo "${PROVIDERS}" | xpath '//option/@value' | sed 's/value="\([^"]*\)"/\1 /g'); do
   PROVIDER=$(echo "${PROVIDERS}" | xpath "//option[@value=${ID}]/text()" | html2ascii)
   INVOICES=$(dijnet "control/szamla_search_submit" "vfw_form=szamla_search_submit&vfw_coll=szamla_search_params&szlaszolgid=${ID}" \
-           | xpath '//table[contains(@class, "szamla_table")]/tbody/tr/td[1]/a/@href' | sed 's/href="\([^"]*\)"/\1 /g;s/\&amp;/\&/g')
+           | xpath '//table[contains(@class, "szamla_table")]/tbody/tr/td[1]/a/@href' | sed 's/href="\([^"]*\)"/\1 /g;s/\&amp;/\&/g' \
+           | sed 's/\/ekonto\/control\///g')
   INVOICE_COUNT=$(echo "${INVOICES}" | wc -w)
   INVOICE_INDEX=1
   for INVOICE in ${INVOICES}; do
-    dijnet "control/${INVOICE}" | grep -q 'href="szamla_letolt"' || die
+    dijnet "control/${INVOICE}" | iconv -f iso8859-2 -t utf-8 | grep 'href="szamla_letolt"' || die
     INVOICE_DOWNLOAD=$(dijnet "control/szamla_letolt")
     INVOICE_NUMBER=$(echo "${INVOICE_DOWNLOAD}" | xpath '//label[@class="title_next_s"]/text()' | sed 's/\//_/g;s/ //g')
     TARGET_FOLDER=$(echo "${PROVIDER}/${INVOICE_NUMBER}" | sed 's/ \+/_/g')
