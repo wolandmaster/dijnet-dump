@@ -30,10 +30,6 @@ xpath() {
   xmllint --html --xpath "$1" - 2>/dev/null
 }
 
-html2ascii() {
-  
-}
-
 dijnet() {
   URL_POSTFIX="$1"
   POST_DATA="$2"
