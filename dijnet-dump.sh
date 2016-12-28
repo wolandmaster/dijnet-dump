@@ -11,10 +11,12 @@ SCRIPT=$(basename $0)
 DIJNET_BASE_URL="https://www.dijnet.hu/ekonto"
 
 USER="$1"; PASS="$2"
-if [ -z "${USER}" -o -z "${PASS}" ]; then
-  echo "usage: ${SCRIPT} username password" >&2
+
+if [ -z "${USER}" ]; then
+  echo "usage: ${SCRIPT} username <password>" >&2
   exit 1
 fi
+[ -z "${PASS}" ] && read -s -p "password: " PASS
 
 COOKIES=$(mktemp)
 trap "rm ${COOKIES}" EXIT
