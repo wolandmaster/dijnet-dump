@@ -53,10 +53,10 @@ progress() {
     echo
   fi
 }
-
+#Dijnet UI changed in 2017.09 therefore login is different
 printf "login... "
 dijnet "login/login_check_password" "vfw_form=login_check_password&username=${USER}&password=${PASS}" \
-| grep -q "Bejelentkez&eacute;si n&eacute;v: </em>${USER}" || die "login failed"
+| grep -q "Bejelentkez&eacute;si n&eacute;v: <strong>${USER}" || die "login failed"
 echo OK
 
 printf "query service providers... "
