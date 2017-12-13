@@ -7,6 +7,13 @@
 # optional dependency:
 # - pv (if you want a nice progress bar)
 
+if ! which xmllint &>/dev/null; then
+  echo "Dependency missing! Please install xmllint:"
+  echo "- debian/ubuntu: apt-get install libxml2-utils"
+  echo "- cygwin: setup-x86_64 -qP libxml2"
+  exit 1
+fi
+
 SCRIPT=$(basename $0)
 DIJNET_BASE_URL="https://www.dijnet.hu/ekonto"
 
