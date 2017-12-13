@@ -16,7 +16,7 @@ if [ -z "${USER}" ]; then
   echo "usage: ${SCRIPT} username <password>" >&2
   exit 1
 fi
-[ -z "${PASS}" ] && read -s -p "password: " PASS
+[ -z "${PASS}" ] && read -s -p "password: " PASS && echo
 
 COOKIES=$(mktemp)
 trap "rm ${COOKIES}" EXIT
@@ -53,9 +53,10 @@ progress() {
     echo
   fi
 }
-#Dijnet UI changed in 2017.09 therefore login is different
+
 printf "login... "
 dijnet "login/login_check_password" "vfw_form=login_check_password&username=${USER}&password=${PASS}" \
+| iconv -f iso8859-2 -t utf-8 \
 | grep -q "Bejelentkez&eacute;si n&eacute;v: <strong>${USER}" || die "login failed"
 echo OK
 
