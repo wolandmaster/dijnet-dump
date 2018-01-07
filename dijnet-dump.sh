@@ -64,7 +64,7 @@ progress() {
 printf "login... "
 dijnet "login/login_check_password" "vfw_form=login_check_password&username=${USER}&password=${PASS}" \
 | iconv -f iso8859-2 -t utf-8 \
-| grep -q "Bejelentkez&eacute;si n&eacute;v: <strong>${USER}" || die "login failed"
+| grep -q --ignore-case "Bejelentkez&eacute;si n&eacute;v: <strong>${USER}" || die "login failed"
 echo OK
 
 printf "query service providers... "
