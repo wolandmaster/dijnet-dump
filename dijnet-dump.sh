@@ -64,7 +64,7 @@ progress() {
 printf "login... "
 dijnet "login/login_check_password" "vfw_form=login_check_password&username=${USER}&password=${PASS}" \
 | iconv -f iso8859-2 -t utf-8 \
-| grep -q --ignore-case "Bejelentkez&eacute;si n&eacute;v: <strong>${USER}" || die "login failed"
+| grep -q "Bejelentkez&eacute;si n&eacute;v: <strong>${USER}" || die "login failed"
 echo OK
 
 printf "query service providers... "
@@ -75,8 +75,8 @@ echo "${PROVIDERS}" | grep -o "value" | wc -w
 for ID in $(echo "${PROVIDERS}" | xpath '//option/@value' | sed 's/value="\([^"]*\)"/\1 /g'); do
   PROVIDER=$(echo "${PROVIDERS}" | xpath "//option[@value=${ID}]/text()" | sed 's/&\([a-zA-Z]\)[a-zA-Z]*;/\1/g')
   INVOICES=$(dijnet "control/szamla_search_submit" "vfw_form=szamla_search_submit&vfw_coll=szamla_search_params&szlaszolgid=${ID}" \
-           | xpath '//table[contains(@class, "szamla_table")]/tbody/tr/td[1]/a/@href' \
-           | sed 's/href="\([^"]*\)"/\1 /g;s/\&amp;/\&/g;s/\/ekonto\/control\///g')
+           | xpath '//table[contains(@class, "szamla_table")]/tbody/tr/td[1]/@onclick' \
+           | sed 's/onclick="xt_cell_click(this,.//g;s/.)"//g;s/\&amp;/\&/g;s/\/ekonto\/control\///g')
   INVOICE_COUNT=$(echo "${INVOICES}" | wc -w)
   INVOICE_INDEX=1
   for INVOICE in ${INVOICES}; do
