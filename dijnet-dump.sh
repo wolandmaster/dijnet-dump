@@ -49,12 +49,13 @@ fi
 SCRIPT=$(basename $0)
 DIJNET_BASE_URL="https://www.dijnet.hu/ekonto"
 
-USER="$1"; PASS="$2"
+USER="$1"
+PASS="$2"
 
-if [ -z "${USER}" ]; then
+[ -z "${USER}" ] && {
 	echo "usage: ${SCRIPT} username <password>" >&2
 	exit 1
-fi
+}
 [ -z "${PASS}" ] && read -s -p "password: " PASS && echo
 
 COOKIES=$(mktemp)
@@ -72,14 +73,16 @@ PROVIDERS=$(dijnet "control/szamla_search" | xpath '//select[@name="szlaszolgid"
 [ -n "${PROVIDERS}" ] || die "not able to detect service providers"
 echo "${PROVIDERS}" | iconv -f iso8859-2 -t utf-8 | grep -o "value" | wc -w | sed 's/\ //g'
 
-for ID in $(echo "${PROVIDERS}" | xpath '//option/@value' | sed 's/value="\([^"]*\)"/\1 /g'); do
+for ID in $(echo "${PROVIDERS}" | xpath '//option/@value' | sed 's/value="\([^"]*\)"/\1 /g')
+do
 	PROVIDER=$(echo "${PROVIDERS}" | xpath "//option[@value=${ID}]/text()" | sed 's/&\([a-zA-Z]\)[a-zA-Z]*;/\1/g')
 	INVOICES=$(dijnet "control/szamla_search_submit" "vfw_form=szamla_search_submit&vfw_coll=szamla_search_params&szlaszolgid=${ID}" \
 		| xpath '//table[contains(@class, "szamla_table")]/tbody/tr/td[1]/@onclick' \
 		| sed 's/onclick="xt_cell_click(this,.//g;s/.)"//g;s/\&amp;/\&/g;s/\/ekonto\/control\///g')
 	INVOICE_COUNT=$(echo "${INVOICES}" | wc -w | sed 's/\ //g')
 	INVOICE_INDEX=1
-	for INVOICE in ${INVOICES}; do
+	for INVOICE in ${INVOICES}
+	do
 		dijnet "control/${INVOICE}" | iconv -f iso8859-2 -t utf-8 | grep -q 'href="szamla_letolt"' || die
 		INVOICE_DOWNLOAD=$(dijnet "control/szamla_letolt")
 		INVOICE_NUMBER=$(echo "${INVOICE_DOWNLOAD}" | xpath '//label[@class="title_next_s"]/text()' | sed 's/\//_/g;s/ //g')
@@ -87,7 +90,8 @@ for ID in $(echo "${PROVIDERS}" | xpath '//option/@value' | sed 's/value="\([^"]
 		mkdir -p "${TARGET_FOLDER}" || die "not able to create folder: ${TARGET_FOLDER}"
 		echo "${INVOICE_INDEX}"
 		DOWNLOAD_LINKS=$(echo "${INVOICE_DOWNLOAD}" | xpath '//a[contains(@class, "xt_link__download")]/@href' | sed 's/href="\([^"]*\)"/\1 /g')
-		for DOWNLOAD_LINK in ${DOWNLOAD_LINKS}; do
+		for DOWNLOAD_LINK in ${DOWNLOAD_LINKS}
+		do
 			echo "${DOWNLOAD_LINK}" | egrep -qi "adobe|e-szigno" && continue
 			wget --quiet --load-cookies "${COOKIES}" --content-disposition --no-clobber \
 				--directory-prefix "${TARGET_FOLDER}" "${DIJNET_BASE_URL}/control/${DOWNLOAD_LINK}"
