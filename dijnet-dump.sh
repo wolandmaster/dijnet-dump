@@ -7,28 +7,6 @@
 # optional dependency:
 # - pv (if you want a nice progress bar)
 
-if ! which xmllint &>/dev/null; then
-	echo "Dependency missing! Please install xmllint:"
-	echo "- debian/ubuntu: apt-get install libxml2-utils"
-	echo "- cygwin: setup-x86_64 -qP libxml2"
-	exit 1
-fi
-
-SCRIPT=$(basename $0)
-DIJNET_BASE_URL="https://www.dijnet.hu/ekonto"
-
-USER="$1"; PASS="$2"
-
-if [ -z "${USER}" ]; then
-	echo "usage: ${SCRIPT} username <password>" >&2
-	exit 1
-fi
-[ -z "${PASS}" ] && read -s -p "password: " PASS && echo
-
-COOKIES=$(mktemp)
-trap "rm ${COOKIES}" EXIT
-trap 'PREV_COMMAND="${THIS_COMMAND}"; THIS_COMMAND="${BASH_COMMAND}"' DEBUG
-
 die() {
 	[ -z "$1" ] && echo "ERROR: exit code not zero of command: ${PREV_COMMAND}" >&2 || echo "ERROR: $1" >&2
 	kill $$
@@ -60,6 +38,28 @@ progress() {
 		echo
 	fi
 }
+
+if ! which xmllint &>/dev/null; then
+	echo "Dependency missing! Please install xmllint:"
+	echo "- debian/ubuntu: apt-get install libxml2-utils"
+	echo "- cygwin: setup-x86_64 -qP libxml2"
+	exit 1
+fi
+
+SCRIPT=$(basename $0)
+DIJNET_BASE_URL="https://www.dijnet.hu/ekonto"
+
+USER="$1"; PASS="$2"
+
+if [ -z "${USER}" ]; then
+	echo "usage: ${SCRIPT} username <password>" >&2
+	exit 1
+fi
+[ -z "${PASS}" ] && read -s -p "password: " PASS && echo
+
+COOKIES=$(mktemp)
+trap "rm ${COOKIES}" EXIT
+trap 'PREV_COMMAND="${THIS_COMMAND}"; THIS_COMMAND="${BASH_COMMAND}"' DEBUG
 
 printf "login... "
 dijnet "login/login_check_password" "vfw_form=login_check_password&username=${USER}&password=${PASS}" \
