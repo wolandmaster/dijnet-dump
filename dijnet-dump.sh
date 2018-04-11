@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # dump all dijnet.hu invoices to the actual folder
 #
 # required dependency:
