@@ -72,6 +72,10 @@ PROVIDERS=$(dijnet "control/szamla_search" | xpath '//select[@name="szlaszolgid"
 [ -n "${PROVIDERS}" ] || die "not able to detect service providers"
 echo "${PROVIDERS}" | grep -o "value" | wc -w
 
+if ! which pv &>/dev/null; then
+  echo "hint: install \"pv\" package for a nice progress bar"
+fi
+
 for ID in $(echo "${PROVIDERS}" | xpath '//option/@value' | sed 's/value="\([^"]*\)"/\1 /g'); do
   PROVIDER=$(echo "${PROVIDERS}" | xpath "//option[@value=${ID}]/text()" | sed 's/&\([a-zA-Z]\)[a-zA-Z]*;/\1/g')
   INVOICES=$(dijnet "control/szamla_search_submit" "vfw_form=szamla_search_submit&vfw_coll=szamla_search_params&szlaszolgid=${ID}" \
@@ -96,3 +100,4 @@ for ID in $(echo "${PROVIDERS}" | xpath '//option/@value' | sed 's/value="\([^"]
     ((INVOICE_INDEX++))
   done | progress
 done
+
