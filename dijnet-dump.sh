@@ -30,7 +30,7 @@ trap "rm ${COOKIES}" EXIT
 trap 'PREV_COMMAND="${THIS_COMMAND}"; THIS_COMMAND="${BASH_COMMAND}"' DEBUG
 
 die() {
-  [ -z "$1" ] && echo "ERROR: exit code not zero of command: ${PREV_COMMAND}" >&2 || echo "ERROR: $1" >&2
+  [ -z "$1" ] && echo "ERROR: exit code not zero of command: ${PREV_COMMAND}" >&2 || echo -e "ERROR: $1" >&2
   kill $$
   exit 1
 }
@@ -62,9 +62,12 @@ progress() {
 }
 
 printf "login... "
-dijnet "login/login_check_password" "vfw_form=login_check_password&username=${USER}&password=${PASS}" \
-| iconv -f iso8859-2 -t utf-8 \
-| grep -q --ignore-case "Bejelentkez&eacute;si n&eacute;v: <strong>${USER}" || die "login failed"
+LOGIN=$(dijnet "login/login_check_password" "vfw_form=login_check_password&username=${USER}&password=${PASS}" \
+      | iconv -f iso8859-2 -t utf-8)
+if ! echo "${LOGIN}" | grep -q --ignore-case "Bejelentkez&eacute;si n&eacute;v: <strong>${USER}"; then
+  LOGIN_ERROR=$(echo "${LOGIN}" | xpath '//strong[contains(@class, "out-error-message")]/text()')
+  die "login failed (${LOGIN_ERROR})"
+fi
 echo OK
 
 printf "query service providers... "
