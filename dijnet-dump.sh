@@ -73,7 +73,7 @@ echo OK
 printf "query service providers... "
 readarray -t PROVIDERS < <(dijnet "control/szamla_search" | perl -lne '/sopts.add\(.(.+?).\)/ and print $1')
 [ -n "${PROVIDERS}" ] || die "not able to detect service providers"
-echo "${#vmfarm1[@]}"
+echo "${#PROVIDERS[@]}"
 
 if ! which pv &>/dev/null; then
   echo "hint: install \"pv\" package for a nice progress bar"
