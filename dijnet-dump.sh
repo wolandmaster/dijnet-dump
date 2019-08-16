@@ -54,9 +54,9 @@ dijnet() {
 
 progress() {
   if which pv &>/dev/null; then
-    pv -N "download \"${PROVIDER}\", total: ${INVOICE_COUNT}, current" -W -b -w 120 -p -l -t -e -s ${INVOICE_COUNT} >/dev/null
+    pv -N "download \"${UTF8_PROVIDER}\", total: ${INVOICE_COUNT}, current" -W -b -w 120 -p -l -t -e -s ${INVOICE_COUNT} >/dev/null
   else
-    xargs -I{} printf "\033[2K\rdownload \"${PROVIDER}\", total: ${INVOICE_COUNT}, current: {}"
+    xargs -I{} printf "\033[2K\rdownload \"${UTF8_PROVIDER}\", total: ${INVOICE_COUNT}, current: {}"
     echo
   fi
 }
@@ -71,17 +71,17 @@ fi
 echo OK
 
 printf "query service providers... "
-PROVIDERS=$(dijnet "control/szamla_search" | xpath '//select[@name="szlaszolgid"]/option[string-length(@value)!=0]')
+readarray -t PROVIDERS < <(dijnet "control/szamla_search" | perl -lne '/sopts.add\(.(.+?).\)/ and print $1')
 [ -n "${PROVIDERS}" ] || die "not able to detect service providers"
-echo "${PROVIDERS}" | grep -o "value" | wc -w
+echo "${#PROVIDERS[@]}"
 
 if ! which pv &>/dev/null; then
   echo "hint: install \"pv\" package for a nice progress bar"
 fi
 
-for ID in $(echo "${PROVIDERS}" | xpath '//option/@value' | sed 's/value="\([^"]*\)"/\1 /g'); do
-  PROVIDER=$(echo "${PROVIDERS}" | xpath "//option[@value=${ID}]/text()" | sed 's/&\([a-zA-Z]\)[a-zA-Z]*;/\1/g')
-  INVOICES=$(dijnet "control/szamla_search_submit" "vfw_form=szamla_search_submit&vfw_coll=szamla_search_params&szlaszolgid=${ID}" \
+for PROVIDER in "${PROVIDERS[@]}"; do
+  UTF8_PROVIDER=$(echo "$PROVIDER" | iconv -f iso8859-2 -t utf-8)
+  INVOICES=$(dijnet "control/szamla_search_submit" "vfw_form=szamla_search_submit&vfw_coll=szamla_search_params&szlaszolgnev=${PROVIDER}" \
            | xpath '//table[contains(@class, "szamla_table")]/tbody/tr/td[1]/@onclick' \
            | sed 's/onclick="xt_cell_click(this,.//g;s/.)"//g;s/\&amp;/\&/g;s/\/ekonto\/control\///g')
   INVOICE_COUNT=$(echo "${INVOICES}" | wc -w)
@@ -90,7 +90,7 @@ for ID in $(echo "${PROVIDERS}" | xpath '//option/@value' | sed 's/value="\([^"]
     dijnet "control/${INVOICE}" | iconv -f iso8859-2 -t utf-8 | grep -q 'href="szamla_letolt"' || die
     INVOICE_DOWNLOAD=$(dijnet "control/szamla_letolt")
     INVOICE_NUMBER=$(echo "${INVOICE_DOWNLOAD}" | xpath '//label[@class="title_next_s"]/text()' | sed 's/\//_/g;s/ //g')
-    TARGET_FOLDER=$(echo "${USER}/${PROVIDER}/${INVOICE_NUMBER}" | sed 's/ \+/_/g;s/\.\//\//g')
+    TARGET_FOLDER=$(echo "${USER}/${UTF8_PROVIDER}/${INVOICE_NUMBER}" | sed 's/ \+/_/g;s/\.\//\//g')
     mkdir -p "${TARGET_FOLDER}" || die "not able to create folder: ${TARGET_FOLDER}"
     echo "${INVOICE_INDEX}"
     DOWNLOAD_LINKS=$(echo "${INVOICE_DOWNLOAD}" | xpath '//a[contains(@class, "xt_link__download")]/@href' | sed 's/href="\([^"]*\)"/\1 /g')
