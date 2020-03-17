@@ -6,7 +6,7 @@
 # 
 # optional dependency:
 # - pv (if you want a nice progress bar)
-
+#set -x
 if ! which xmllint &>/dev/null; then
   echo "Dependency missing! Please install xmllint:"
   echo "- debian/ubuntu: apt-get install libxml2-utils"
@@ -17,12 +17,39 @@ fi
 SCRIPT=$(basename $0)
 DIJNET_BASE_URL="https://www.dijnet.hu/ekonto"
 
-USER="$1"; PASS="$2"
+ALIAS=""
+TOL=""
+IG=""
+USER="$1"; PASS="";
+IDSELECT="szlaszolgnev"
+unset PROVIDERS
+declare -A PROVIDERS
+declare -i IDX=-1
 
 if [ -z "${USER}" ]; then
-  echo "usage: ${SCRIPT} username <password>" >&2
+  echo "usage: ${SCRIPT} username [-p <password>] [-t <datumtol>] [-i <datumig>] [-a <igen|nem>] " >&2
+  echo "Pl.: alias nevek és időtartomány használata: ${SCRIPT} username -p password -t 2019.01.01 -i 2020.02.01 -a igen"
   exit 1
 fi
+
+while [ $# -gt $OPTIND ]; do
+	while getopts "t:i:a:p:" opt; do
+		case $opt in
+			t) TOL="$OPTARG"
+			;;
+			i) IG="$OPTARG"
+			;;
+			a) ALIAS="$OPTARG"
+			;;
+			p) PASS="$OPTARG"
+			;;
+			\?) echo "Hibás opció -$OPTARG" >&2
+			;;
+		esac
+	done
+	OPTIND=$((OPTIND+1))
+done
+
 [ -z "${PASS}" ] && read -s -p "password: " PASS && echo
 
 COOKIES=$(mktemp)
@@ -70,20 +97,47 @@ if ! echo "${LOGIN}" | grep -q --ignore-case "Bejelentkez&eacute;si n&eacute;v: 
 fi
 echo OK
 
-printf "query service providers... "
-readarray -t PROVIDERS < <(dijnet "control/szamla_search" | perl -lne '/sopts.add\(.(.+?).\)/ and print $1')
-[ -n "${PROVIDERS}" ] || die "not able to detect service providers"
-echo "${#PROVIDERS[@]}"
+echo "query service providers..."
+if [ "$ALIAS" == "igen" ]
+then
+	while IFS== read -r key value; do
+		#removing whitepsaces
+		key=$(echo "$key" | xargs)
+		#echo "$key=$value"
+		PROVIDERS["$key"]="$value"
+	done<<EOF
+		$(dijnet "control/szamla_search" | perl -lne 'while( /"regszolgid":(\d+?),.*?"alias":"(.+?)"/g ){ print "$1=$2"  }')
+EOF
+	IDSELECT="regszolgid"
+else
+	unset PROVIDERS
+	declare -a PROVIDERS
+	readarray -t PROVIDERS < <(dijnet "control/szamla_search" | perl -lne '/sopts.add\(.(.+?).\)/ and print $1')
+	IDSELECT="szlaszolgnev"
+fi
+[ ! -z "${#PROVIDERS[@]}" ] || die "not able to detect service providers"
+echo "Talált nevek mennyisége: ${#PROVIDERS[@]}"
+echo "Talált nevek számai: ${!PROVIDERS[@]}"
+echo "Talalt nevek: ${PROVIDERS[@]}" | iconv -f iso8859-2 -t utf-8
 
 if ! which pv &>/dev/null; then
   echo "hint: install \"pv\" package for a nice progress bar"
 fi
 
+KEYS=(${!PROVIDERS[@]})
 for PROVIDER in "${PROVIDERS[@]}"; do
+  IDX=$((IDX+1))
   UTF8_PROVIDER=$(echo "$PROVIDER" | iconv -f iso8859-2 -t utf-8)
-  INVOICES=$(dijnet "control/szamla_search_submit" "vfw_form=szamla_search_submit&vfw_coll=szamla_search_params&szlaszolgnev=${PROVIDER}" \
-           | xpath '//table[contains(@class, "szamla_table")]/tbody/tr/td[1]/@onclick' \
-           | sed 's/onclick="xt_cell_click(this,.//g;s/.)"//g;s/\&amp;/\&/g;s/\/ekonto\/control\///g')
+  if [ "$ALIAS" == "igen" ]
+  then
+    INVOICES=$(dijnet "control/szamla_search_submit" "vfw_form=szamla_search_submit&vfw_coll=szamla_search_params&${IDSELECT}=${KEYS[$IDX]}&datumtol=${TOL}&datumig=${IG}" \
+             | xpath '//table[contains(@class, "szamla_table")]/tbody/tr/td[1]/@onclick' \
+             | sed 's/onclick="xt_cell_click(this,.//g;s/.)"//g;s/\&amp;/\&/g;s/\/ekonto\/control\///g')
+  else
+    INVOICES=$(dijnet "control/szamla_search_submit" "vfw_form=szamla_search_submit&vfw_coll=szamla_search_params&${IDSELECT}=${PROVIDER}&datumtol=${TOL}&datumig=${IG}" \
+             | xpath '//table[contains(@class, "szamla_table")]/tbody/tr/td[1]/@onclick' \
+             | sed 's/onclick="xt_cell_click(this,.//g;s/.)"//g;s/\&amp;/\&/g;s/\/ekonto\/control\///g')
+  fi
   INVOICE_COUNT=$(echo "${INVOICES}" | wc -w)
   INVOICE_INDEX=1
   for INVOICE in ${INVOICES}; do
@@ -103,4 +157,5 @@ for PROVIDER in "${PROVIDERS[@]}"; do
     ((INVOICE_INDEX++))
   done | progress
 done
+
 
