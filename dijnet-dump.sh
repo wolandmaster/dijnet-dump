@@ -58,9 +58,9 @@ dijnet() {
 
 progress() {
   if which pv &>/dev/null; then
-    pv -N "download \"${UTF8_PROVIDER}\", total: ${INVOICE_COUNT}, current" -W -b -w 120 -p -l -t -e -s ${INVOICE_COUNT} >/dev/null
+    pv -N "download \"${PROVIDER_UTF8}\", total: ${INVOICE_COUNT}, current" -W -b -w 120 -p -l -t -e -s ${INVOICE_COUNT} >/dev/null
   else
-    xargs -I{} printf "\033[2K\rdownload \"${UTF8_PROVIDER}\", total: ${INVOICE_COUNT}, current: {}"
+    xargs -I{} printf "\033[2K\rdownload \"${PROVIDER_UTF8}\", total: ${INVOICE_COUNT}, current: {}"
     echo
   fi
 }
@@ -74,16 +74,16 @@ fi
 echo OK
 
 printf "query service providers... "
-readarray -t PROVIDERS < <(dijnet "control/szamla_search" | LANG=hu_HU.iso8859-2 sed -n "s/.*sopts.add('\([^']\+\)');/\1/p")
+PROVIDERS=$(dijnet "control/szamla_search" | LANG=hu_HU.iso8859-2 sed -n "s/.*sopts.add('\([^']\+\)');/\1/p")
 [ -n "${PROVIDERS}" ] || die "not able to detect service providers"
-echo "${#PROVIDERS[@]}"
+echo "${PROVIDERS}" | wc -l
 
 if ! which pv &>/dev/null; then
   echo "hint: install \"pv\" package for a nice progress bar"
 fi
 
-for PROVIDER in "${PROVIDERS[@]}"; do
-  UTF8_PROVIDER=$(echo "$PROVIDER" | utf8)
+echo "${PROVIDERS}" | while read PROVIDER; do
+  PROVIDER_UTF8=$(echo "${PROVIDER}" | utf8)
   INVOICES=$(dijnet "control/szamla_search_submit" "vfw_form=szamla_search_submit&vfw_coll=szamla_search_params&szlaszolgnev=${PROVIDER}" \
            | sed -n "s/.*clickSzamlaGTM('szamla_select', \([0-9]\+\));/\1/p")
   INVOICE_COUNT=$(echo "${INVOICES}" | wc -w)
@@ -91,7 +91,7 @@ for PROVIDER in "${PROVIDERS[@]}"; do
     dijnet "control/szamla_select" "vfw_coll=szamla_list&vfw_rowid=${INVOICE_INDEX}&exp=K" | utf8 | grep -q 'href="szamla_letolt"' || die
     INVOICE_DOWNLOAD=$(dijnet "control/szamla_letolt")
     INVOICE_NUMBER=$(echo "${INVOICE_DOWNLOAD}" | xpath '//label[@class="title_next_s"]/text()' | sed 's/\//_/g;s/ //g')
-    TARGET_FOLDER=$(echo "${UTF8_PROVIDER}/${INVOICE_NUMBER}" | sed 's/ \+/_/g;s/\.\//\//g')
+    TARGET_FOLDER=$(echo "${PROVIDER_UTF8}/${INVOICE_NUMBER}" | sed 's/ \+/_/g;s/\.\//\//g')
     mkdir -p "${TARGET_FOLDER}" || die "not able to create folder: ${TARGET_FOLDER}"
     echo "${INVOICE_INDEX}"
     DOWNLOAD_LINKS=$(echo "${INVOICE_DOWNLOAD}" | xpath '//a[contains(@class, "xt_link__download")]/@href' | sed 's/href="\([^"]*\)"/\1 /g')
