@@ -39,6 +39,10 @@ xpath() {
   xmllint --html --xpath "$1" - 2>/dev/null
 }
 
+utf8() {
+  iconv -f iso8859-2 -t utf-8
+}
+
 dijnet() {
   URL_POSTFIX="$1"
   POST_DATA="$2"
@@ -62,8 +66,7 @@ progress() {
 }
 
 printf "login... "
-LOGIN=$(dijnet "login/login_check_password" "vfw_form=login_check_password&username=${USER}&password=${PASS}" \
-      | iconv -f iso8859-2 -t utf-8)
+LOGIN=$(dijnet "login/login_check_password" "vfw_form=login_check_password&username=${USER}&password=${PASS}" | utf8)
 if ! echo "${LOGIN}" | grep -q --ignore-case "Bejelentkez&eacute;si n&eacute;v: <strong>${USER}"; then
   LOGIN_ERROR=$(echo "${LOGIN}" | xpath '//strong[contains(@class, "out-error-message")]/text()')
   die "login failed (${LOGIN_ERROR})"
@@ -80,14 +83,12 @@ if ! which pv &>/dev/null; then
 fi
 
 for PROVIDER in "${PROVIDERS[@]}"; do
-  UTF8_PROVIDER=$(echo "$PROVIDER" | iconv -f iso8859-2 -t utf-8)
+  UTF8_PROVIDER=$(echo "$PROVIDER" | utf8)
   INVOICES=$(dijnet "control/szamla_search_submit" "vfw_form=szamla_search_submit&vfw_coll=szamla_search_params&szlaszolgnev=${PROVIDER}" \
-           | xpath '//table[contains(@class, "szamla_table")]/tbody/tr/td[1]/@onclick' \
-           | sed 's/onclick="xt_cell_click(this,.//g;s/.)"//g;s/\&amp;/\&/g;s/\/ekonto\/control\///g')
+           | sed -n "s/.*clickSzamlaGTM('szamla_select', \([0-9]\+\));/\1/p")
   INVOICE_COUNT=$(echo "${INVOICES}" | wc -w)
-  INVOICE_INDEX=1
-  for INVOICE in ${INVOICES}; do
-    dijnet "control/${INVOICE}" | iconv -f iso8859-2 -t utf-8 | grep -q 'href="szamla_letolt"' || die
+  for INVOICE_INDEX in ${INVOICES}; do
+    dijnet "control/szamla_select" "vfw_coll=szamla_list&vfw_rowid=${INVOICE_INDEX}&exp=K" | utf8 | grep -q 'href="szamla_letolt"' || die
     INVOICE_DOWNLOAD=$(dijnet "control/szamla_letolt")
     INVOICE_NUMBER=$(echo "${INVOICE_DOWNLOAD}" | xpath '//label[@class="title_next_s"]/text()' | sed 's/\//_/g;s/ //g')
     TARGET_FOLDER=$(echo "${UTF8_PROVIDER}/${INVOICE_NUMBER}" | sed 's/ \+/_/g;s/\.\//\//g')
@@ -100,7 +101,6 @@ for PROVIDER in "${PROVIDERS[@]}"; do
            --directory-prefix "${TARGET_FOLDER}" "${DIJNET_BASE_URL}/control/${DOWNLOAD_LINK}"
     done
     dijnet "control/szamla_list" &>/dev/null
-    ((INVOICE_INDEX++))
   done | progress
 done
 
