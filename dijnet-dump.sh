@@ -3,7 +3,7 @@
 #
 # required dependency:
 # - libxml2-utils
-# 
+#
 # optional dependency:
 # - pv (if you want a nice progress bar)
 
@@ -71,7 +71,7 @@ fi
 echo OK
 
 printf "query service providers... "
-readarray -t PROVIDERS < <(dijnet "control/szamla_search" | perl -lne '/sopts.add\(.(.+?).\)/ and print $1')
+readarray -t PROVIDERS < <(dijnet "control/szamla_search" | LANG=hu_HU.iso8859-2 sed -n "s/.*sopts.add('\([^']\+\)');/\1/p")
 [ -n "${PROVIDERS}" ] || die "not able to detect service providers"
 echo "${#PROVIDERS[@]}"
 
