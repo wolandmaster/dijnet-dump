@@ -35,7 +35,7 @@ unaccent() {
 
 dijnet() {
   URL_POSTFIX="$1"; shift; local IFS=""; POST_DATA="$*"
-  wget --quiet --output-document=- --post-data "${POST_DATA}" \
+  wget --quiet --output-document=- --post-data "${POST_DATA}" --no-check-certificate \
        --load-cookies "${COOKIES}" --save-cookies "${COOKIES}" --keep-session-cookies \
        ${DIJNET_BASE_URL}/${URL_POSTFIX}
 }
@@ -103,10 +103,9 @@ echo "${PROVIDERS}" | while read PROVIDER; do
     | sed 's/href="\([^"]*\)"/\1 /g')
     for DOWNLOAD_LINK in ${DOWNLOAD_LINKS}; do
       egrep -qi "adobe|e-szigno" <<<"${DOWNLOAD_LINK}" && continue
-      wget --quiet --load-cookies "${COOKIES}" --content-disposition --no-clobber \
+      wget --quiet --load-cookies "${COOKIES}" --content-disposition --no-clobber --no-check-certificate \
            --directory-prefix "${FIXED_TARGET_FOLDER}" "${DIJNET_BASE_URL}/ekonto/control/${DOWNLOAD_LINK}"
     done
     dijnet "ekonto/control/szamla_list" &>/dev/null
   done | progress || exit 1
 done
-
