@@ -82,7 +82,7 @@ echo "${PROVIDERS}" | while read PROVIDER; do
   INVOICE_PROVIDER=$(to_utf8 <<<"${PROVIDER}")
   INVOICES=$(dijnet "ekonto/control/szamla_search_submit" "vfw_form=szamla_search_submit" \
     "&vfw_coll=szamla_search_params&szlaszolgnev=${PROVIDER}&datumtol=${FROM_DATE}&datumig=${TILL_DATE}" \
-    | sed -n "s/.*clickSzamlaGTM('szamla_select', \([0-9]\+\));/\1/p")
+    | sed -n "s/.*clickSzamlaGTM('szamla_select', \([0-9]\+\).*/\1/p")
   INVOICE_COUNT=$(wc -w <<<"${INVOICES}")
 
   for INVOICE_INDEX in ${INVOICES}; do
