@@ -41,7 +41,8 @@ dijnet() {
 }
 
 invoice_data() {
-  xpath '//label[text()="'"$1"'"]/../following-sibling::td[1]//text()' <<<"${INVOICE_DOWNLOAD}"
+  local IFS="|"; FILTER=$(sed 's/|/" or text()="/g' <<<"$*")
+  xpath '//label[text()="'"${FILTER}"'"]/../following-sibling::td[1]//text()' <<<"${INVOICE_DOWNLOAD}"
 }
 
 progress() {
@@ -90,11 +91,10 @@ echo "${PROVIDERS}" | while read PROVIDER; do
     INVOICE_DOWNLOAD=$(dijnet "ekonto/control/szamla_letolt" | unaccent)
     INVOICE_NUMBER=$(invoice_data "Szamlaszam:" | sed 's/\//_/g')
     INVOICE_ISSUER_ID=$(invoice_data "Szamlakibocsatoi azonosito:")
-    INVOICE_PAYMENT_DEADLINE=$(invoice_data "Fizetesi hatarido:")
+    INVOICE_PAYMENT_DEADLINE=$(invoice_data "Fizetesi hatarido:" "Beerkezesi hatarido:")
     INVOICE_ISSUE_DATE=$(invoice_data "Kiallitas datuma:")
     INVOICE_AMOUNT=$(invoice_data "Szamla osszege:")
     INVOICE_STATUS=$(invoice_data "Szamla allapota:")
-    INVOICE_BALANCE=$(invoice_data "Szamla egyenlege: ")
     . "$(dirname "$(readlink -f "$0")")/dijnet-dump.conf"
     FIXED_TARGET_FOLDER=$(sed 's/ \+/_/g;s/_-_/-/g;s/\.\//\//g' <<<"${TARGET_FOLDER}" | unaccent)
     mkdir -p "${FIXED_TARGET_FOLDER}" || die "ERROR: not able to create folder: ${FIXED_TARGET_FOLDER}"
@@ -109,3 +109,4 @@ echo "${PROVIDERS}" | while read PROVIDER; do
     dijnet "ekonto/control/szamla_list" &>/dev/null
   done | progress || exit 1
 done
+
