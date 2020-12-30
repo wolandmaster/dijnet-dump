@@ -42,7 +42,7 @@ dijnet() {
 
 invoice_data() {
   local IFS="|"; FILTER=$(sed 's/|/" or text()="/g' <<<"$*")
-  xpath '//label[text()="'"${FILTER}"'"]/../following-sibling::td[1]//text()' <<<"${INVOICE_DOWNLOAD}"
+  unaccent <<<"${DOWNLOAD_PAGE}" | xpath '//label[text()="'"${FILTER}"'"]/../following-sibling::td[1]//text()'
 }
 
 progress() {
@@ -57,38 +57,45 @@ progress() {
 
 set -o pipefail; export LC_ALL=C
 . "$(dirname "$(readlink -f "$0")")/dijnet-dump.conf"
-DIJNET_USERNAME="${1:-${DIJNET_USERNAME}}"; DIJNET_PASSWORD="${2:-${DIJNET_PASSWORD}}"
-[[ -z "${DIJNET_USERNAME}" ]] && die "usage: $(basename "$0") username <password>"
+[[ "$1" == "-d" ]] && DEBUG_MODE="yes" && shift
+DIJNET_USERNAME="${1:-${DIJNET_USERNAME}}"
+[[ -z "${DIJNET_USERNAME}" ]] && die "usage: $(basename "$0") [-d] username"
 [[ -z "${DIJNET_PASSWORD}" ]] && read -s -p "password: " DIJNET_PASSWORD && echo
+if [[ "${DEBUG_MODE}" == "yes" ]]; then
+  exec 3> >(sed 's/'"${DIJNET_USERNAME}"'/<USERNAME>/g;s/'"${DIJNET_PASSWORD}"'/********/g' >debug.log)
+  export BASH_XTRACEFD="3"
+  set -x
+fi
 
 COOKIES=$(mktemp)
 trap "rm ${COOKIES}" EXIT
 
 printf "login... "
-LOGIN=$(dijnet "ekonto/login/login_check_password" \
-  "vfw_form=login_check_password&username=${DIJNET_USERNAME}&password=${DIJNET_PASSWORD}" | unaccent)
-if ! grep -qi "Bejelentkezesi nev: <strong>${DIJNET_USERNAME}" <<<"${LOGIN}"; then
-  LOGIN_ERROR=$(xpath '//div[contains(@class, "alert")]/strong/text()' <<<"${LOGIN}" | to_utf8)
+LOGIN_PAGE=$(dijnet "ekonto/login/login_check_password" \
+  "vfw_form=login_check_password&username=${DIJNET_USERNAME}&password=${DIJNET_PASSWORD}")
+if ! grep -qi "Bejelentkezesi nev: <strong>${DIJNET_USERNAME}</strong>" <(unaccent <<<"${LOGIN_PAGE}"); then
+  LOGIN_ERROR=$(xpath '//div[contains(@class, "alert")]/strong/text()' <<<"${LOGIN_PAGE}" | to_utf8)
   die "\nERROR: login failed (${LOGIN_ERROR})"
 fi
 echo OK
 
 printf "query service providers... "
-PROVIDERS=$(dijnet "ekonto/control/szamla_search" | sed -n "s/.*sopts.add('\([^']\+\)');/\1/p")
+PROVIDERS_PAGE=$(dijnet "ekonto/control/szamla_search")
+PROVIDERS=$(sed -n "s/.*sopts.add('\([^']\+\)');/\1/p" <<<"${PROVIDERS_PAGE}")
 [[ -z "${PROVIDERS}" ]] && die "ERROR: not able to detect service providers" || wc -l <<<"${PROVIDERS}"
 which pv &>/dev/null || echo "hint: install \"pv\" package for a nice progress bar"
 
 echo "${PROVIDERS}" | while read PROVIDER; do
   INVOICE_PROVIDER=$(to_utf8 <<<"${PROVIDER}")
-  INVOICES=$(dijnet "ekonto/control/szamla_search_submit" "vfw_form=szamla_search_submit" \
-    "&vfw_coll=szamla_search_params&szlaszolgnev=${PROVIDER}&datumtol=${FROM_DATE}&datumig=${TILL_DATE}" \
-    | sed -n "s/.*clickSzamlaGTM('szamla_select', \([0-9]\+\).*/\1/p")
+  INVOICES_PAGE=$(dijnet "ekonto/control/szamla_search_submit" "vfw_form=szamla_search_submit" \
+    "&vfw_coll=szamla_search_params&szlaszolgnev=${PROVIDER}&datumtol=${FROM_DATE}&datumig=${TILL_DATE}")
+  INVOICES=$(sed -n "s/.*clickSzamlaGTM('szamla_select', \([0-9]\+\).*/\1/p" <<<"${INVOICES_PAGE}")
   INVOICE_COUNT=$(wc -w <<<"${INVOICES}")
 
   for INVOICE_INDEX in ${INVOICES}; do
-    dijnet "ekonto/control/szamla_select" "vfw_coll=szamla_list&vfw_rowid=${INVOICE_INDEX}" \
-    | to_utf8 | grep -q 'href="szamla_letolt"' || die "ERROR: not able to select invoice"
-    INVOICE_DOWNLOAD=$(dijnet "ekonto/control/szamla_letolt" | unaccent)
+    INVOICE_PAGE=$(dijnet "ekonto/control/szamla_select" "vfw_coll=szamla_list&vfw_rowid=${INVOICE_INDEX}")
+    to_utf8 <<<"${INVOICE_PAGE}" | grep -q 'href="szamla_letolt"' || die "ERROR: not able to select invoice"
+    DOWNLOAD_PAGE=$(dijnet "ekonto/control/szamla_letolt")
     INVOICE_NUMBER=$(invoice_data "Szamlaszam:" | sed 's/\//_/g')
     INVOICE_ISSUER_ID=$(invoice_data "Szamlakibocsatoi azonosito:")
     INVOICE_PAYMENT_DEADLINE=$(invoice_data "Fizetesi hatarido:" "Beerkezesi hatarido:")
@@ -99,7 +106,7 @@ echo "${PROVIDERS}" | while read PROVIDER; do
     FIXED_TARGET_FOLDER=$(sed 's/ \+/_/g;s/_-_/-/g;s/\.\//\//g' <<<"${TARGET_FOLDER}" | unaccent)
     mkdir -p "${FIXED_TARGET_FOLDER}" || die "ERROR: not able to create folder: ${FIXED_TARGET_FOLDER}"
     echo $((${INVOICE_INDEX} + 1))
-    DOWNLOAD_LINKS=$(xpath '//a[contains(@class, "xt_link__download")]/@href' <<<"${INVOICE_DOWNLOAD}" \
+    DOWNLOAD_LINKS=$(xpath '//a[contains(@class, "xt_link__download")]/@href' <<<"${DOWNLOAD_PAGE}" \
     | sed 's/href="\([^"]*\)"/\1 /g')
     for DOWNLOAD_LINK in ${DOWNLOAD_LINKS}; do
       egrep -qi "adobe|e-szigno" <<<"${DOWNLOAD_LINK}" && continue
