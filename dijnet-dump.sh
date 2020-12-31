@@ -15,7 +15,7 @@ if ! which xmllint wget &>/dev/null; then
 fi
 
 die() {
-  echo -e "$@" >&2 && exit 1
+  EXIT_CODE="$?" && echo -e "$@" >&2 && exit 1
 }
 
 xpath() {
@@ -94,7 +94,7 @@ echo "${PROVIDERS}" | while read PROVIDER; do
 
   for INVOICE_INDEX in ${INVOICES}; do
     INVOICE_PAGE=$(dijnet "ekonto/control/szamla_select" "vfw_coll=szamla_list&vfw_rowid=${INVOICE_INDEX}")
-    to_utf8 <<<"${INVOICE_PAGE}" | grep -q 'href="szamla_letolt"' || die "ERROR: not able to select invoice"
+    grep -q 'href="szamla_letolt"' <(to_utf8 <<<"${INVOICE_PAGE}") || die "ERROR: not able to select invoice"
     DOWNLOAD_PAGE=$(dijnet "ekonto/control/szamla_letolt")
     INVOICE_NUMBER=$(invoice_data "Szamlaszam:" | sed 's/\//_/g')
     INVOICE_ISSUER_ID=$(invoice_data "Szamlakibocsatoi azonosito:")
