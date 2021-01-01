@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
-# dump all dijnet.hu invoices to the actual folder
-#
-# required dependency:
-# - libxml2-utils
-#
-# optional dependency:
-# - pv (if you want a nice progress bar)
+# dijnet.hu invoice downloader [https://github.com/wolandmaster/dijnet-dump]
+# Copyright (c) 2016-2021 Sandor Balazsi and others
+# This software may be distributed under the terms of the Apache 2.0 license
 
-if ! which xmllint wget &>/dev/null; then
-  echo "Dependency missing! Please install them:"
-  echo "- debian/ubuntu: apt-get install libxml2-utils wget"
-  echo "- cygwin: setup-x86_64 -qP libxml2 wget"
+if ! command -v xmllint wget &>/dev/null; then
+  echo "Dependency missing! Please install them:" >&2
+  echo "- debian/ubuntu: apt-get install libxml2-utils wget" >&2
+  echo "- cygwin: setup-x86_64 -qP libxml2 wget" >&2
   exit 1
 fi
 
@@ -37,7 +33,7 @@ dijnet() {
   URL_POSTFIX="$1"; shift; local IFS=""; POST_DATA="$*"
   wget --quiet --output-document=- --post-data "${POST_DATA}" --no-check-certificate \
        --load-cookies "${COOKIES}" --save-cookies "${COOKIES}" --keep-session-cookies \
-       ${DIJNET_BASE_URL}/${URL_POSTFIX}
+       "${DIJNET_BASE_URL}/${URL_POSTFIX}"
 }
 
 invoice_data() {
@@ -46,23 +42,23 @@ invoice_data() {
 }
 
 progress() {
-  if which pv &>/dev/null; then
-    pv -N "download \"${INVOICE_PROVIDER}\", total: ${INVOICE_COUNT}, current" \
-       -W -b -w 120 -p -l -t -e -s ${INVOICE_COUNT} >/dev/null
+  local PROVIDER_NAME=$(unaccent <<<"${INVOICE_PROVIDER} (${INVOICE_PROVIDER_ALIAS})" | sed 's/ ()$//')
+  if command -v pv &>/dev/null; then
+    pv -N "download \"${PROVIDER_NAME}\", total: ${INVOICE_COUNT}, current" \
+       -W -b -p -l -t -e -s "${INVOICE_COUNT}" >/dev/null
   else
-    xargs -I{} printf "\033[2K\rdownload \"${INVOICE_PROVIDER}\", total: ${INVOICE_COUNT}, current: {}"
-    echo
+    xargs -I{} printf "\033[2K\rdownload \"${PROVIDER_NAME}\", total: ${INVOICE_COUNT}, current: {}"; echo
   fi
 }
 
 set -o pipefail; export LC_ALL=C
-. "$(dirname "$(readlink -f "$0")")/dijnet-dump.conf"
-[[ "$1" == "-d" ]] && DEBUG_MODE="yes" && shift
+. "$(dirname "$(readlink -f "$0")")/dijnet-dump.conf" || die "ERROR: config file (dijnet-dump.conf) missing"
+[[ "$1" == "-d" ]] && DEBUG_LOG="yes" && shift
 DIJNET_USERNAME="${1:-${DIJNET_USERNAME}}"
 [[ -z "${DIJNET_USERNAME}" ]] && die "usage: $(basename "$0") [-d] username"
-[[ -z "${DIJNET_PASSWORD}" ]] && read -s -p "password: " DIJNET_PASSWORD && echo
-if [[ "${DEBUG_MODE}" == "yes" ]]; then
-  exec 3> >(sed 's/'"${DIJNET_USERNAME}"'/<USERNAME>/g;s/'"${DIJNET_PASSWORD}"'/********/g' >debug.log)
+[[ -z "${DIJNET_PASSWORD}" ]] && read -r -s -p "password: " DIJNET_PASSWORD && echo
+if [[ "${DEBUG_LOG}" == "yes" ]]; then
+  exec 3> >(sed 's/'"${DIJNET_USERNAME}"'/<USERNAME>/g;s/'"${DIJNET_PASSWORD}"'/********/g' >dijnet-dump.log)
   export BASH_XTRACEFD="3"
   set -x
 fi
@@ -81,14 +77,16 @@ echo OK
 
 printf "query service providers... "
 PROVIDERS_PAGE=$(dijnet "ekonto/control/szamla_search")
-PROVIDERS=$(sed -n "s/.*sopts.add('\([^']\+\)');/\1/p" <<<"${PROVIDERS_PAGE}")
-[[ -z "${PROVIDERS}" ]] && die "ERROR: not able to detect service providers" || wc -l <<<"${PROVIDERS}"
-which pv &>/dev/null || echo "hint: install \"pv\" package for a nice progress bar"
+grep -c "sopts.add" <<<"${PROVIDERS_PAGE}" || die "ERROR: not able to detect service providers"
+command -v pv &>/dev/null || echo "hint: install \"pv\" package for a nice progress bar"
 
-echo "${PROVIDERS}" | while read PROVIDER; do
-  INVOICE_PROVIDER=$(to_utf8 <<<"${PROVIDER}")
+sed -n 's/.*var ropts\s*=\s*\[\(.*\)\];.*/\1/;s/},\s*{/}\n{/gp' <<<"${PROVIDERS_PAGE}" | while read -r PROVIDER_JSON; do
+  declare -A PROVIDER=$(sed 's/"\([^"]\+\)":\([^,}]\+\),\?/ [\1]=\2/g;s/^{/(/;s/}$/ )/' <<<"${PROVIDER_JSON}")
+  INVOICE_PROVIDER=$(to_utf8 <<<"${PROVIDER["szlaszolgnev"]}")
+  INVOICE_PROVIDER_ALIAS=$(to_utf8 <<<"${PROVIDER["alias"]}" | sed 's/^null$//')
   INVOICES_PAGE=$(dijnet "ekonto/control/szamla_search_submit" "vfw_form=szamla_search_submit" \
-    "&vfw_coll=szamla_search_params&szlaszolgnev=${PROVIDER}&datumtol=${FROM_DATE}&datumig=${TILL_DATE}")
+    "&vfw_coll=szamla_search_params&szlaszolgnev=${PROVIDER["szlaszolgnev"]}&regszolgid=${PROVIDER["regszolgid"]}" \
+    "&datumtol=${FROM_DATE}&datumig=${TILL_DATE}")
   INVOICES=$(sed -n "s/.*clickSzamlaGTM('szamla_select', \([0-9]\+\).*/\1/p" <<<"${INVOICES_PAGE}")
   INVOICE_COUNT=$(wc -w <<<"${INVOICES}")
 
@@ -103,17 +101,17 @@ echo "${PROVIDERS}" | while read PROVIDER; do
     INVOICE_AMOUNT=$(invoice_data "Szamla osszege:")
     INVOICE_STATUS=$(invoice_data "Szamla allapota:")
     . "$(dirname "$(readlink -f "$0")")/dijnet-dump.conf"
-    FIXED_TARGET_FOLDER=$(sed 's/ \+/_/g;s/_-_/-/g;s/\.\//\//g' <<<"${TARGET_FOLDER}" | unaccent)
+    FIXED_TARGET_FOLDER=$(sed 's/ \+/_/g;s/_-_/-/g;s/[.-]\+\//\//g' <<<"${TARGET_FOLDER}" | unaccent)
     mkdir -p "${FIXED_TARGET_FOLDER}" || die "ERROR: not able to create folder: ${FIXED_TARGET_FOLDER}"
-    echo $((${INVOICE_INDEX} + 1))
+    echo $((INVOICE_INDEX + 1))
     DOWNLOAD_LINKS=$(xpath '//a[contains(@class, "xt_link__download")]/@href' <<<"${DOWNLOAD_PAGE}" \
     | sed 's/href="\([^"]*\)"/\1 /g')
     for DOWNLOAD_LINK in ${DOWNLOAD_LINKS}; do
-      egrep -qi "adobe|e-szigno" <<<"${DOWNLOAD_LINK}" && continue
+      grep -Eqi "adobe|e-szigno" <<<"${DOWNLOAD_LINK}" && continue
       wget --quiet --load-cookies "${COOKIES}" --content-disposition --no-clobber --no-check-certificate \
            --directory-prefix "${FIXED_TARGET_FOLDER}" "${DIJNET_BASE_URL}/ekonto/control/${DOWNLOAD_LINK}"
     done
-    dijnet "ekonto/control/szamla_list" &>/dev/null
+    INVOICE_LIST_PAGE=$(dijnet "ekonto/control/szamla_list")
   done | progress || exit 1
 done
 
