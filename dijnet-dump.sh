@@ -80,7 +80,8 @@ PROVIDERS_PAGE=$(dijnet "ekonto/control/szamla_search")
 grep -c "sopts.add" <<<"${PROVIDERS_PAGE}" || die "ERROR: not able to detect service providers"
 command -v pv &>/dev/null || echo "hint: install \"pv\" package for a nice progress bar"
 
-sed -n 's/.*var ropts\s*=\s*\[\(.*\)\];.*/\1/;s/},\s*{/}\n{/gp' <<<"${PROVIDERS_PAGE}" | while read -r PROVIDER_JSON; do
+sed -n 's/.*var ropts\s*=\s*\[\(.*\)\];.*/\1/p' <<<"${PROVIDERS_PAGE}" | sed 's/},\s*{/}\n{/g' \
+| while read -r PROVIDER_JSON; do
   declare -A PROVIDER=$(sed 's/"\([^"]\+\)":\([^,}]\+\),\?/ [\1]=\2/g;s/^{/(/;s/}$/ )/' <<<"${PROVIDER_JSON}")
   INVOICE_PROVIDER=$(to_utf8 <<<"${PROVIDER["szlaszolgnev"]}")
   INVOICE_PROVIDER_ALIAS=$(to_utf8 <<<"${PROVIDER["alias"]}" | sed 's/^null$//')
