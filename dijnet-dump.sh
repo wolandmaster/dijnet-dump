@@ -41,17 +41,26 @@ invoice_data() {
   unaccent <<<"${DOWNLOAD_PAGE}" | xpath '//label[text()="'"${FILTER}"'"]/../following-sibling::td[1]//text()'
 }
 
+download_internal_links() {
+  LINKS=$(xpath '//a[contains(@class, "xt_link__download")]/@href' | sed 's/href="\([^"]*\)"/\1 /g')
+  for LINK in ${LINKS}; do
+    grep -q "^http" <<<"${LINK}" && continue
+    wget --quiet --load-cookies "${COOKIES}" --content-disposition --no-clobber --no-check-certificate \
+         --directory-prefix "${FIXED_TARGET_FOLDER}" "${DIJNET_BASE_URL}/ekonto/control/${LINK}"
+  done
+}
+
 progress() {
   local PROVIDER_NAME=$(unaccent <<<"${INVOICE_PROVIDER} (${INVOICE_PROVIDER_ALIAS})" | sed 's/ ()$//')
   if command -v pv &>/dev/null; then
     pv -N "download \"${PROVIDER_NAME}\", total: ${INVOICE_COUNT}, current" \
        -W -b -p -l -t -e -s "${INVOICE_COUNT}" >/dev/null
   else
-    xargs -I{} printf "\033[2K\rdownload \"${PROVIDER_NAME}\", total: ${INVOICE_COUNT}, current: {}"; echo
+    xargs -n 1 echo -ne "\033[2K\rdownload \"${PROVIDER_NAME}\", total: ${INVOICE_COUNT}, current:"; echo
   fi
 }
 
-set -o pipefail; export LC_ALL=C
+set -o pipefail; export LANG=C LC_ALL=C
 . "$(dirname "$(readlink -f "$0")")/dijnet-dump.conf" || die "ERROR: config file (dijnet-dump.conf) missing"
 [[ "$1" == "-d" ]] && DEBUG_LOG="yes" && shift
 DIJNET_USERNAME="${1:-${DIJNET_USERNAME}}"
@@ -93,7 +102,7 @@ sed -n 's/.*var ropts\s*=\s*\[\(.*\)\];.*/\1/p' <<<"${PROVIDERS_PAGE}" | sed 's/
 
   for INVOICE_INDEX in ${INVOICES}; do
     INVOICE_PAGE=$(dijnet "ekonto/control/szamla_select" "vfw_coll=szamla_list&vfw_rowid=${INVOICE_INDEX}")
-    grep -q 'href="szamla_letolt"' <(to_utf8 <<<"${INVOICE_PAGE}") || die "ERROR: not able to select invoice"
+    grep -q 'href="szamla_letolt"' <<<"${INVOICE_PAGE}" || die "ERROR: not able to select invoice"
     DOWNLOAD_PAGE=$(dijnet "ekonto/control/szamla_letolt")
     INVOICE_NUMBER=$(invoice_data "Szamlaszam:" | sed 's/\//_/g')
     INVOICE_ISSUER_ID=$(invoice_data "Szamlakibocsatoi azonosito:")
@@ -104,14 +113,14 @@ sed -n 's/.*var ropts\s*=\s*\[\(.*\)\];.*/\1/p' <<<"${PROVIDERS_PAGE}" | sed 's/
     . "$(dirname "$(readlink -f "$0")")/dijnet-dump.conf"
     FIXED_TARGET_FOLDER=$(sed 's/ \+/_/g;s/_-_/-/g;s/[.-]\+\//\//g' <<<"${TARGET_FOLDER}" | unaccent)
     mkdir -p "${FIXED_TARGET_FOLDER}" || die "ERROR: not able to create folder: ${FIXED_TARGET_FOLDER}"
+    download_internal_links <<<"${DOWNLOAD_PAGE}"
+    if grep -q 'href="szamla_info"' <<<"${INVOICE_PAGE}"; then
+      INFO_PAGE=$(dijnet "ekonto/control/szamla_info") && download_internal_links <<<"${INFO_PAGE}"
+    fi
+    if grep -q 'href="szamla_reszletek"' <<<"${INVOICE_PAGE}"; then
+      DETAILS_PAGE=$(dijnet "ekonto/control/szamla_reszletek") && download_internal_links <<<"${DETAILS_PAGE}"
+    fi
     echo $((INVOICE_INDEX + 1))
-    DOWNLOAD_LINKS=$(xpath '//a[contains(@class, "xt_link__download")]/@href' <<<"${DOWNLOAD_PAGE}" \
-    | sed 's/href="\([^"]*\)"/\1 /g')
-    for DOWNLOAD_LINK in ${DOWNLOAD_LINKS}; do
-      grep -Eqi "adobe|e-szigno" <<<"${DOWNLOAD_LINK}" && continue
-      wget --quiet --load-cookies "${COOKIES}" --content-disposition --no-clobber --no-check-certificate \
-           --directory-prefix "${FIXED_TARGET_FOLDER}" "${DIJNET_BASE_URL}/ekonto/control/${DOWNLOAD_LINK}"
-    done
     INVOICE_LIST_PAGE=$(dijnet "ekonto/control/szamla_list")
   done | progress || exit 1
 done
