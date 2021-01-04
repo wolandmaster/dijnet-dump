@@ -8,4 +8,3 @@ ENV LC_ALL hu_HU.UTF-8
 ENV LANGUAGE hu_HU:hu
 
 COPY dijnet-dump.sh dijnet-dump.conf /work/
-WORKDIR /work

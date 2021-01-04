@@ -8,4 +8,3 @@ COPY tests/lede-17.01/libxml2-utils_2.9.4-2_x86_64.ipk /tmp/
 RUN mkdir -p /var/lock && opkg update && opkg install bash wget xxd /tmp/libxml2-utils_2.9.4-2_x86_64.ipk
 
 COPY dijnet-dump.sh dijnet-dump.conf /work/
-WORKDIR /work

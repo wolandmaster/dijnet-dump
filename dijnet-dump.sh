@@ -15,6 +15,10 @@ die() {
   EXIT_CODE="$?" && echo -e "$@" >&2 && exit 1
 }
 
+absolute_path() {
+  pushd . >/dev/null && cd "$(dirname "$1")" && pwd -P && popd >/dev/null
+}
+
 xpath() {
   xmllint --html --xpath "$1" - 2>/dev/null
 }
@@ -61,7 +65,7 @@ progress() {
 }
 
 set -o pipefail; export LANG=C LC_ALL=C
-. "$(dirname "$(readlink -f "$0")")/dijnet-dump.conf" || die "ERROR: config file (dijnet-dump.conf) missing"
+. "$(absolute_path "$0")/dijnet-dump.conf" || die "ERROR: config file (dijnet-dump.conf) missing"
 [[ "$1" == "-d" ]] && DEBUG_LOG="yes" && shift
 DIJNET_USERNAME="${1:-${DIJNET_USERNAME}}"
 [[ -z "${DIJNET_USERNAME}" ]] && die "usage: $(basename "$0") [-d] username"
@@ -110,7 +114,7 @@ sed -n 's/.*var ropts\s*=\s*\[\(.*\)\];.*/\1/p' <<<"${PROVIDERS_PAGE}" | sed 's/
     INVOICE_ISSUE_DATE=$(invoice_data "Kiallitas datuma:")
     INVOICE_AMOUNT=$(invoice_data "Szamla osszege:")
     INVOICE_STATUS=$(invoice_data "Szamla allapota:")
-    . "$(dirname "$(readlink -f "$0")")/dijnet-dump.conf"
+    . "$(absolute_path "$0")/dijnet-dump.conf"
     FIXED_TARGET_FOLDER=$(sed 's/ \+/_/g;s/_-_/-/g;s/[.-]\+\//\//g' <<<"${TARGET_FOLDER}")
     mkdir -p "${FIXED_TARGET_FOLDER}" || die "ERROR: not able to create folder: ${FIXED_TARGET_FOLDER}"
     download_internal_links <<<"${DOWNLOAD_PAGE}"
