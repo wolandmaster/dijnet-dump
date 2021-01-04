@@ -3,10 +3,11 @@
 # Copyright (c) 2016-2021 Sandor Balazsi and others
 # This software may be distributed under the terms of the Apache 2.0 license
 
-if ! command -v xmllint wget &>/dev/null; then
+if ! type xmllint wget xxd &>/dev/null; then
   echo "Dependency missing! Please install them:" >&2
-  echo "- debian/ubuntu: apt-get install libxml2-utils wget" >&2
-  echo "- cygwin: setup-x86_64 -qP libxml2 wget" >&2
+  echo "- debian/ubuntu: apt-get install wget xxd libxml2-utils" >&2
+  echo "- fedora: dnf install wget vim-common findutils" >&2
+  echo "- openwrt: opkg install bash wget xxd libxml2-utils" >&2
   exit 1
 fi
 
@@ -18,15 +19,14 @@ xpath() {
   xmllint --html --xpath "$1" - 2>/dev/null
 }
 
-to_utf8() {
-  iconv -f iso8859-2 -t utf-8
-}
-
 unaccent() {
-  sed 's/&\(.\)\(acute\|uml\);/\1/g;s/\xF5/o/g;s/&nbsp;/ /g
-       s/\xc3\xa1/a/g;s/\xc3\x81/A/g;s/\xc3\xa9/e/g;s/\xc3\x89/E/g;s/\xc3\xad/i/g;s/\xc3\x8d/I/g
-       s/\xc3\xb3/o/g;s/\xc3\x93/O/g;s/\xc3\xb6/o/g;s/\xc3\x96/O/g;s/\xc3\xba/u/g;s/\xc3\x9a/U/g
-       s/\xc3\xbc/u/g;s/\xc3\x9c/U/g;s/\xc5\x91/o/g;s/\xc5\x90/O/g;s/\xc5\xb1/u/g;s/\xc5\xb0/U/g'
+  xxd -ps | tr -d '\n' | sed 's/\(..\)/ \1/g
+    s/e1/61/g;s/c1/41/g;s/e9/65/g;s/c9/45/g;s/ed/69/g;s/cd/49/g;s/f3/6f/g;s/d3/4f/g;s/f5/6f/g
+    s/d5/4f/g;s/f6/6f/g;s/d6/4f/g;s/fa/75/g;s/da/55/g;s/fb/75/g;s/db/55/g;s/fc/75/g;s/dc/55/g
+    s/c3 a1/61/g;s/c3 81/41/g;s/c3 a9/65/g;s/c3 89/45/g;s/c3 ad/69/g;s/c3 8d/49/g
+    s/c3 b3/6f/g;s/c3 93/4f/g;s/c3 b6/6f/g;s/c3 96/4f/g;s/c5 91/6f/g;s/c5 90/4f/g
+    s/c3 ba/75/g;s/c3 9a/55/g;s/c3 bc/75/g;s/c3 9c/55/g;s/c5 b1/75/g;s/c5 b0/55/g' \
+  | xxd -r -ps | sed 's/&\(.\)\(acute\|uml\|dblac\);/\1/g;s/&nbsp;/ /g'
 }
 
 dijnet() {
@@ -51,8 +51,8 @@ download_internal_links() {
 }
 
 progress() {
-  local PROVIDER_NAME=$(unaccent <<<"${INVOICE_PROVIDER} (${INVOICE_PROVIDER_ALIAS})" | sed 's/ ()$//')
-  if command -v pv &>/dev/null; then
+  local PROVIDER_NAME=$(sed 's/ ()$//' <<<"${INVOICE_PROVIDER} (${INVOICE_PROVIDER_ALIAS})")
+  if type pv &>/dev/null; then
     pv -N "download \"${PROVIDER_NAME}\", total: ${INVOICE_COUNT}, current" \
        -W -b -p -l -t -e -s "${INVOICE_COUNT}" >/dev/null
   else
@@ -79,7 +79,7 @@ printf "login... "
 LOGIN_PAGE=$(dijnet "ekonto/login/login_check_password" \
   "vfw_form=login_check_password&username=${DIJNET_USERNAME}&password=${DIJNET_PASSWORD}")
 if ! grep -qi "Bejelentkezesi nev: <strong>${DIJNET_USERNAME}</strong>" <(unaccent <<<"${LOGIN_PAGE}"); then
-  LOGIN_ERROR=$(xpath '//div[contains(@class, "alert")]/strong/text()' <<<"${LOGIN_PAGE}" | to_utf8)
+  LOGIN_ERROR=$(unaccent <<<"${LOGIN_PAGE}" | xpath '//div[contains(@class, "alert")]/strong/text()')
   die "\nERROR: login failed (${LOGIN_ERROR})"
 fi
 echo OK
@@ -87,13 +87,13 @@ echo OK
 printf "query service providers... "
 PROVIDERS_PAGE=$(dijnet "ekonto/control/szamla_search")
 grep -c "sopts.add" <<<"${PROVIDERS_PAGE}" || die "ERROR: not able to detect service providers"
-command -v pv &>/dev/null || echo "hint: install \"pv\" package for a nice progress bar"
+type pv &>/dev/null || echo "hint: install \"pv\" package for a nice progress bar"
 
 sed -n 's/.*var ropts\s*=\s*\[\(.*\)\];.*/\1/p' <<<"${PROVIDERS_PAGE}" | sed 's/},\s*{/}\n{/g' \
 | while read -r PROVIDER_JSON; do
   declare -A PROVIDER=$(sed 's/"\([^"]\+\)":\([^,}]\+\),\?/ [\1]=\2/g;s/^{/(/;s/}$/ )/' <<<"${PROVIDER_JSON}")
-  INVOICE_PROVIDER=$(to_utf8 <<<"${PROVIDER["szlaszolgnev"]}")
-  INVOICE_PROVIDER_ALIAS=$(to_utf8 <<<"${PROVIDER["alias"]}" | sed 's/^null$//')
+  INVOICE_PROVIDER=$(unaccent <<<"${PROVIDER["szlaszolgnev"]}" | sed 's/\.$//')
+  INVOICE_PROVIDER_ALIAS=$(unaccent <<<"${PROVIDER["alias"]}" | sed 's/^null$//')
   INVOICES_PAGE=$(dijnet "ekonto/control/szamla_search_submit" "vfw_form=szamla_search_submit" \
     "&vfw_coll=szamla_search_params&szlaszolgnev=${PROVIDER["szlaszolgnev"]}&regszolgid=${PROVIDER["regszolgid"]}" \
     "&datumtol=${FROM_DATE}&datumig=${TILL_DATE}")
@@ -111,7 +111,7 @@ sed -n 's/.*var ropts\s*=\s*\[\(.*\)\];.*/\1/p' <<<"${PROVIDERS_PAGE}" | sed 's/
     INVOICE_AMOUNT=$(invoice_data "Szamla osszege:")
     INVOICE_STATUS=$(invoice_data "Szamla allapota:")
     . "$(dirname "$(readlink -f "$0")")/dijnet-dump.conf"
-    FIXED_TARGET_FOLDER=$(sed 's/ \+/_/g;s/_-_/-/g;s/[.-]\+\//\//g' <<<"${TARGET_FOLDER}" | unaccent)
+    FIXED_TARGET_FOLDER=$(sed 's/ \+/_/g;s/_-_/-/g;s/[.-]\+\//\//g' <<<"${TARGET_FOLDER}")
     mkdir -p "${FIXED_TARGET_FOLDER}" || die "ERROR: not able to create folder: ${FIXED_TARGET_FOLDER}"
     download_internal_links <<<"${DOWNLOAD_PAGE}"
     if grep -q 'href="szamla_info"' <<<"${INVOICE_PAGE}"; then
