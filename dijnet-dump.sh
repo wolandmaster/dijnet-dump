@@ -65,6 +65,7 @@ progress() {
 }
 
 set -o pipefail; export LANG=C LC_ALL=C
+type gsed &>/dev/null && sed() { exec gsed "$@"; }
 . "$(absolute_path "$0")/dijnet-dump.conf" || die "ERROR: config file (dijnet-dump.conf) missing"
 [[ "$1" == "-d" ]] && DEBUG_LOG="yes" && shift
 DIJNET_USERNAME="${1:-${DIJNET_USERNAME}}"
