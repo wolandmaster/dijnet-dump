@@ -12,7 +12,7 @@ if ! type xmllint wget xxd &>/dev/null; then
 fi
 
 die() {
-  EXIT_CODE="$?" && echo -e "$@" >&2 && exit 1
+  EXIT_CODE="$?" && printf "$*" >&2 && exit 1
 }
 
 absolute_path() {
@@ -60,7 +60,7 @@ progress() {
     pv -N "download \"${PROVIDER_NAME}\", total: ${INVOICE_COUNT}, current" \
        -W -b -p -l -t -e -s "${INVOICE_COUNT}" >/dev/null
   else
-    xargs -n 1 echo -ne "\033[2K\rdownload \"${PROVIDER_NAME}\", total: ${INVOICE_COUNT}, current:"; echo
+    xargs -n 1 printf "\033[2K\rdownload \"${PROVIDER_NAME}\", total: ${INVOICE_COUNT}, current: %d"; echo
   fi
 }
 
