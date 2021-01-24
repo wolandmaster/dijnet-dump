@@ -16,6 +16,7 @@ RUN cmake -DFULL_BUILD=OFF .. \
     && make -j $(getconf _NPROCESSORS_ONLN) install \
     && make -j $(getconf _NPROCESSORS_ONLN) lkm
 
+
 FROM ubuntu:18.04
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -49,7 +50,7 @@ RUN printf '%s\n' \
       '  shift' \
       'done' > /usr/local/bin/brew_install \
     && chmod a+x /usr/local/bin/brew_install \
-    && brew_install bash gnu-sed libxml2 wget pv
+    && brew_install bash libxml2 wget pv
 
 RUN printf '%s\n' \
       '#!/bin/bash' \

@@ -24,13 +24,13 @@ xpath() {
 }
 
 unaccent() {
-  xxd -ps | tr -d '\n' | sed 's/\(..\)/ \1/g
+  xxd -ps | tr -d '\n' | sed -E 's/(..)/ \1/g
     s/e1/61/g;s/c1/41/g;s/e9/65/g;s/c9/45/g;s/ed/69/g;s/cd/49/g;s/f3/6f/g;s/d3/4f/g;s/f5/6f/g
     s/d5/4f/g;s/f6/6f/g;s/d6/4f/g;s/fa/75/g;s/da/55/g;s/fb/75/g;s/db/55/g;s/fc/75/g;s/dc/55/g
     s/c3 a1/61/g;s/c3 81/41/g;s/c3 a9/65/g;s/c3 89/45/g;s/c3 ad/69/g;s/c3 8d/49/g
     s/c3 b3/6f/g;s/c3 93/4f/g;s/c3 b6/6f/g;s/c3 96/4f/g;s/c5 91/6f/g;s/c5 90/4f/g
     s/c3 ba/75/g;s/c3 9a/55/g;s/c3 bc/75/g;s/c3 9c/55/g;s/c5 b1/75/g;s/c5 b0/55/g' \
-  | xxd -r -ps | sed 's/&\(.\)\(acute\|uml\|dblac\);/\1/g;s/&nbsp;/ /g'
+  | xxd -r -ps | sed -E 's/&(.)(acute|uml|dblac);/\1/g;s/&nbsp;/ /g'
 }
 
 dijnet() {
@@ -46,7 +46,8 @@ invoice_data() {
 }
 
 download_internal_links() {
-  LINKS=$(xpath '//a[contains(@class, "xt_link__download")]/@href' | sed 's/href="\([^"]*\)"/\1 /g')
+  HREFS=$(xpath '//a[contains(@class, "xt_link__download")]/@href')
+  LINKS=$(tr -d '\n' <<<"${HREFS}" | sed -E $'s/[[:space:]]*href="//g;s/"[[:space:]]*/\\\n/g')
   for LINK in ${LINKS}; do
     grep -q "^http" <<<"${LINK}" && continue
     wget --quiet --load-cookies "${COOKIES}" --content-disposition --no-clobber --no-check-certificate \
@@ -57,15 +58,14 @@ download_internal_links() {
 progress() {
   local PROVIDER_NAME=$(sed 's/ ()$//' <<<"${INVOICE_PROVIDER} (${INVOICE_PROVIDER_ALIAS})")
   if type pv &>/dev/null; then
-    pv -N "download \"${PROVIDER_NAME}\", total: ${INVOICE_COUNT}, current" \
-       -W -b -p -l -t -e -s "${INVOICE_COUNT}" >/dev/null
+    pv -N "download \"${PROVIDER_NAME}\", total: ${#INVOICES[@]}, current" \
+       -W -b -p -l -t -e -s "${#INVOICES[@]}" >/dev/null
   else
-    xargs -n 1 printf "\033[2K\rdownload \"${PROVIDER_NAME}\", total: ${INVOICE_COUNT}, current: %d"; echo
+    xargs -n 1 printf "\033[2K\rdownload \"${PROVIDER_NAME}\", total: ${#INVOICES[@]}, current: %d"; echo
   fi
 }
 
 set -o pipefail; export LANG=C LC_ALL=C
-type gsed &>/dev/null && sed() { exec gsed "$@"; }
 . "$(absolute_path "$0")/dijnet-dump.conf" || die "ERROR: config file (dijnet-dump.conf) missing"
 [[ "$1" == "-d" ]] && DEBUG_LOG="yes" && shift
 DIJNET_USERNAME="${1:-${DIJNET_USERNAME}}"
@@ -94,18 +94,17 @@ PROVIDERS_PAGE=$(dijnet "ekonto/control/szamla_search")
 grep -c "sopts.add" <<<"${PROVIDERS_PAGE}" || die "ERROR: not able to detect service providers"
 type pv &>/dev/null || echo "hint: install \"pv\" package for a nice progress bar"
 
-sed -n 's/.*var ropts\s*=\s*\[\(.*\)\];.*/\1/p' <<<"${PROVIDERS_PAGE}" | sed 's/},\s*{/}\n{/g' \
+sed -En 's/.*var ropts = \[(.*)\];.*/\1/p' <<<"${PROVIDERS_PAGE}" | sed $'s/}, {/}\\\n{/g' \
 | while read -r PROVIDER_JSON; do
-  declare -A PROVIDER=$(sed 's/"\([^"]\+\)":\([^,}]\+\),\?/ [\1]=\2/g;s/^{/(/;s/}$/ )/' <<<"${PROVIDER_JSON}")
+  declare -A PROVIDER=$(sed -E 's/"([^"]+)":([^,}]+),?/ [\1]=\2/g;s/^\{/(/;s/}$/ )/' <<<"${PROVIDER_JSON}")
   INVOICE_PROVIDER=$(unaccent <<<"${PROVIDER["szlaszolgnev"]}" | sed 's/\.$//')
   INVOICE_PROVIDER_ALIAS=$(unaccent <<<"${PROVIDER["alias"]}" | sed 's/^null$//')
   INVOICES_PAGE=$(dijnet "ekonto/control/szamla_search_submit" "vfw_form=szamla_search_submit" \
     "&vfw_coll=szamla_search_params&szlaszolgnev=${PROVIDER["szlaszolgnev"]}&regszolgid=${PROVIDER["regszolgid"]}" \
     "&datumtol=${FROM_DATE}&datumig=${TILL_DATE}")
-  INVOICES=$(sed -n "s/.*clickSzamlaGTM('szamla_select', \([0-9]\+\).*/\1/p" <<<"${INVOICES_PAGE}")
-  INVOICE_COUNT=$(wc -w <<<"${INVOICES}")
+  IFS=$'\n' INVOICES=($(sed -En "s/.*clickSzamlaGTM\('szamla_select', ([0-9]+).*/\1/p" <<<"${INVOICES_PAGE}"))
 
-  for INVOICE_INDEX in ${INVOICES}; do
+  for INVOICE_INDEX in ${INVOICES[@]}; do
     INVOICE_PAGE=$(dijnet "ekonto/control/szamla_select" "vfw_coll=szamla_list&vfw_rowid=${INVOICE_INDEX}")
     grep -q 'href="szamla_letolt"' <<<"${INVOICE_PAGE}" || die "ERROR: not able to select invoice"
     DOWNLOAD_PAGE=$(dijnet "ekonto/control/szamla_letolt")
@@ -116,7 +115,7 @@ sed -n 's/.*var ropts\s*=\s*\[\(.*\)\];.*/\1/p' <<<"${PROVIDERS_PAGE}" | sed 's/
     INVOICE_AMOUNT=$(invoice_data "Szamla osszege:")
     INVOICE_STATUS=$(invoice_data "Szamla allapota:")
     . "$(absolute_path "$0")/dijnet-dump.conf"
-    FIXED_TARGET_FOLDER=$(sed 's/ \+/_/g;s/_-_/-/g;s/[.-]\+\//\//g' <<<"${TARGET_FOLDER}")
+    FIXED_TARGET_FOLDER=$(sed -E 's/[[:space:]]+/_/g;s/_-_/-/g;s/[.-]+\//\//g' <<<"${TARGET_FOLDER}")
     mkdir -p "${FIXED_TARGET_FOLDER}" || die "ERROR: not able to create folder: ${FIXED_TARGET_FOLDER}"
     download_internal_links <<<"${DOWNLOAD_PAGE}"
     if grep -q 'href="szamla_info"' <<<"${INVOICE_PAGE}"; then

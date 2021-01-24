@@ -14,16 +14,28 @@ absolute_path() {
 
 set -e; cd "$(absolute_path "$0")"
 trap '[[ $? == 0 ]] && echo "Overall result: SUCCESS" || echo "Overall result: FAILED"' EXIT
+read -r ROWS COLUMNS < <(stty size)
 
 TARGETS="$@"; [[ -z "${TARGETS}" ]] && TARGETS="tests/*"
+LAST_CHECKSUM=""
 for TARGET in $(ls -d ${TARGETS} 2>/dev/null); do
   banner "${TARGET:6}"
   docker build --file ${TARGET}/Dockerfile --tag dijnet-dump:${TARGET:6} .
-  docker run --tty --interactive --privileged dijnet-dump:${TARGET:6} bash -c '
-    mkdir /tmp/invoices \
+  CHECKSUM=$(docker run --tty --interactive --privileged dijnet-dump:${TARGET:6} bash -c '
+    export LANG=C LC_ALL=C \
+    && mkdir /tmp/invoices \
     && cd /tmp/invoices \
+    && stty columns '"${COLUMNS}"' \
     && /work/dijnet-dump.sh \
-    && find .
-  '
+    && find . -type f -exec wc -c {} \; | tee /dev/tty | grep -v "dijnet-dump.log" \
+     | sort -k2 | sed -E "s/^[[:space:]]*//" | cksum | awk "{print \"CHECKSUM:\", \$1}"
+  ' | tee /dev/tty | awk '/CHECKSUM:/ {print $NF}')
+
+  if [[ -z "${LAST_CHECKSUM}" || "${CHECKSUM}" == "${LAST_CHECKSUM}" ]]; then
+    LAST_CHECKSUM="${CHECKSUM}"
+  else
+    echo "Test result checksum mismatch!" >&2
+    exit 1
+  fi
 done
 
