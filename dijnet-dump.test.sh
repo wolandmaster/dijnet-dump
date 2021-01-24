@@ -19,11 +19,11 @@ TARGETS="$@"; [[ -z "${TARGETS}" ]] && TARGETS="tests/*"
 for TARGET in $(ls -d ${TARGETS} 2>/dev/null); do
   banner "${TARGET:6}"
   docker build --file ${TARGET}/Dockerfile --tag dijnet-dump:${TARGET:6} .
-  docker run --tty --interactive dijnet-dump:${TARGET:6} bash -c '
+  docker run --tty --interactive --privileged dijnet-dump:${TARGET:6} bash -c '
     mkdir /tmp/invoices \
     && cd /tmp/invoices \
     && /work/dijnet-dump.sh \
-    && find
+    && find .
   '
 done
 
