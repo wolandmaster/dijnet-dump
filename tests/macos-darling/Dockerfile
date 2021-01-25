@@ -41,11 +41,12 @@ RUN printf '%s\n' \
       '[[ "${PRODUCT_VERSION}" == "10.15" ]] && PRODUCT_NAME="catalina"' \
       '[[ "${PRODUCT_VERSION}" == "11.0"  ]] && PRODUCT_NAME="big_sur"' \
       '[[ -z "${PRODUCT_NAME}" ]] && echo "unknown macOS version" && exit 1' \
-      'while (($#)); do' \
+      'INSTALLED=(); while (($#)); do' \
+      '  [[ " ${INSTALLED[*]} " == *" $1 "* ]] && shift && continue' \
       '  FORMULA=$(wget -qO- "https://formulae.brew.sh/api/formula/$1.json")' \
       '  jq -r ".bottle.stable.files.${PRODUCT_NAME}.url" <<<"${FORMULA}" \' \
       '  | xargs wget --show-progress --progress=bar:force -qO "$1.tar.gz"' \
-      '  tar --strip-components=2 -xf "$1.tar.gz" && rm "$1.tar.gz"' \
+      '  tar --strip-components=2 -xf "$1.tar.gz" && rm "$1.tar.gz" && INSTALLED+=("$1")' \
       '  set -- "$@" $(jq -r ".dependencies | @tsv" <<<"${FORMULA}")' \
       '  shift' \
       'done' > /usr/local/bin/brew_install \
