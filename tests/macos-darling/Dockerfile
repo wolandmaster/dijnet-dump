@@ -50,11 +50,13 @@ RUN printf '%s\n' \
       '  shift' \
       'done' > /usr/local/bin/brew_install \
     && chmod a+x /usr/local/bin/brew_install \
-    && brew_install bash libxml2 wget pv
+    && brew_install bash libxml2 wget
 
 RUN printf '%s\n' \
       '#!/bin/bash' \
       'sudo mount -t tmpfs tmpfs /home/darling' \
+      'sudo rmmod darling-mach.ko' \
+      'sudo insmod /lib/modules/current/extra/darling-mach.ko' \
       'exec darling shell "$@"' > /entrypoint.sh \
     && chmod a+x /entrypoint.sh
 

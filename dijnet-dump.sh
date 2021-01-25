@@ -20,7 +20,7 @@ absolute_path() {
 }
 
 xpath() {
-  xmllint --html --xpath "$1" - 2>/dev/null
+  sed 's/;[[:space:]]*charset=[Ii][Ss][Oo]-8859-2//g' | xmllint --html --xpath "$1" - 2>/dev/null
 }
 
 unaccent() {
@@ -61,7 +61,8 @@ progress() {
     pv -N "download \"${PROVIDER_NAME}\", total: ${#INVOICES[@]}, current" \
        -W -b -p -l -t -e -s "${#INVOICES[@]}" >/dev/null
   else
-    xargs -n 1 printf "\033[2K\rdownload \"${PROVIDER_NAME}\", total: ${#INVOICES[@]}, current: %d"; echo
+    awk -v name="${PROVIDER_NAME}" -v total="${#INVOICES[@]}" \
+        '{printf "\033[2K\rdownload \"%s\", total: %d, current: %d", name, total, $1; fflush(stdout)}'; echo
   fi
 }
 
@@ -100,8 +101,7 @@ sed -En 's/.*var ropts = \[(.*)\];.*/\1/p' <<<"${PROVIDERS_PAGE}" | sed $'s/}, {
   INVOICE_PROVIDER=$(unaccent <<<"${PROVIDER["szlaszolgnev"]}" | sed 's/\.$//')
   INVOICE_PROVIDER_ALIAS=$(unaccent <<<"${PROVIDER["alias"]}" | sed 's/^null$//')
   INVOICES_PAGE=$(dijnet "ekonto/control/szamla_search_submit" "vfw_form=szamla_search_submit" \
-    "&vfw_coll=szamla_search_params&szlaszolgnev=${PROVIDER["szlaszolgnev"]}&regszolgid=${PROVIDER["regszolgid"]}" \
-    "&datumtol=${FROM_DATE}&datumig=${TILL_DATE}")
+    "&vfw_coll=szamla_search_params&regszolgid=${PROVIDER["regszolgid"]}&datumtol=${FROM_DATE}&datumig=${TILL_DATE}")
   IFS=$'\n' INVOICES=($(sed -En "s/.*clickSzamlaGTM\('szamla_select', ([0-9]+).*/\1/p" <<<"${INVOICES_PAGE}"))
 
   for INVOICE_INDEX in ${INVOICES[@]}; do
