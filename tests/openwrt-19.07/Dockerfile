@@ -2,7 +2,8 @@ FROM ubuntu:18.04 as builder
 
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get install -y \
-    build-essential git gawk wget file unzip python libncurses5-dev
+    build-essential git gawk wget file unzip python libncurses5-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work
 RUN git clone --branch "openwrt-19.07" https://git.openwrt.org/openwrt/openwrt.git . \
@@ -33,8 +34,9 @@ FROM scratch
 COPY --from=builder /work/rootfs/ /
 COPY --from=builder /work/bin/packages/x86_64/packages/libxml2-utils*.ipk /tmp/
 RUN mkdir -p /var/lock && opkg update \
-    && opkg install coreutils-stty coreutils-cksum coreutils-sort \
+    && opkg install coreutils-stty \
     && opkg install bash xxd wget pv /tmp/libxml2-utils*.ipk
 CMD ["/bin/sh"]
 
+WORKDIR /tmp
 COPY dijnet-dump.sh dijnet-dump.conf /work/

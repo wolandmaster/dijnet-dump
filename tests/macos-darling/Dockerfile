@@ -6,7 +6,8 @@ RUN apt-get update && apt-get install -y \
     gcc-multilib libcap2-bin libc6-dev-i386 libcairo2-dev libgl1-mesa-dev libglu1-mesa-dev \
     libtiff5-dev libfreetype6-dev libelf-dev libxml2-dev libegl1-mesa-dev libfontconfig1-dev \
     libbsd-dev libxrandr-dev libxcursor-dev libgif-dev libavutil-dev libpulse-dev libssl-dev \
-    libavformat-dev libavcodec-dev libavresample-dev libdbus-1-dev libxkbfile-dev
+    libavformat-dev libavcodec-dev libavresample-dev libdbus-1-dev libxkbfile-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work
 RUN git clone --recursive https://github.com/darlinghq/darling.git
@@ -21,7 +22,8 @@ FROM ubuntu:18.04
 
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get install -y \
-    kmod libx11-6 libxrandr2 libegl1 libgl1 xdg-user-dirs wget jq sudo
+    kmod libx11-6 libxrandr2 libegl1 libgl1 xdg-user-dirs wget jq sudo \
+    && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /lib/modules/$(uname -r) \
     && ln -s /lib/modules/$(uname -r) /lib/modules/current \
     && groupadd -g 1000 darling \
@@ -56,7 +58,7 @@ RUN printf '%s\n' \
 RUN printf '%s\n' \
       '#!/bin/bash' \
       'sudo mount -t tmpfs tmpfs /home/darling' \
-      'sudo rmmod darling-mach.ko' \
+      'sudo rmmod darling-mach.ko &>/dev/null' \
       'sudo insmod /lib/modules/current/extra/darling-mach.ko' \
       'exec darling shell "$@"' > /entrypoint.sh \
     && chmod a+x /entrypoint.sh

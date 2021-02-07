@@ -1,0 +1,8 @@
+/*
+!.gitignore
+!README.md
+!LICENSE
+!dijnet-dump.sh
+!dijnet-dump.conf
+!dijnet-dump.test.sh
+!/tests/

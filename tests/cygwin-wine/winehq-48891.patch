@@ -1,0 +1,26 @@
+https://bugs.winehq.org/show_bug.cgi?id=48891
+--- a/dlls/advapi32/tests/security.c
++++ b/dlls/advapi32/tests/security.c
+@@ -1086,10 +1086,9 @@
+     SetLastError(0xdeadbeef);
+     rc = AccessCheck(sd, token, DELETE, &mapping, &priv_set, &priv_set_len, &granted, &status);
+     ok(rc, "AccessCheck error %d\n", GetLastError());
+-todo_wine {
+     ok(status == 1, "expected 1, got %d\n", status);
+     ok(granted == DELETE, "expected DELETE, got %#x\n", granted);
+-}
++
+     granted = 0xdeadbeef;
+     status = 0xdeadbeef;
+     SetLastError(0xdeadbeef);
+--- a/server/token.c
++++ b/server/token.c
+@@ -1066,7 +1066,7 @@
+      * determined here. */
+     if (token_sid_present( token, owner, FALSE ))
+     {
+-        current_access |= (READ_CONTROL | WRITE_DAC);
++        current_access |= (READ_CONTROL | WRITE_DAC | DELETE | WRITE_OWNER);
+         if (desired_access == current_access)
+         {
+             *granted_access = current_access;

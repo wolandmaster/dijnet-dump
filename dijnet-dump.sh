@@ -9,6 +9,7 @@ if ! type xmllint wget xxd &>/dev/null || [[ ${BASH_VERSINFO[0]} < 4 ]]; then
   echo "- fedora: dnf install wget vim-common findutils" >&2
   echo "- openwrt/lede: opkg install bash wget xxd libxml2-utils" >&2
   echo "- macos: brew install bash wget libxml2" >&2
+  echo "- cygwin: setup-x86.exe -qP wget xxd libxml2" >&2
   exit 1
 fi
 
@@ -63,7 +64,8 @@ progress() {
        -W -b -p -l -t -e -s "${#INVOICES[@]}" >/dev/null
   else
     awk -v name="${PROVIDER_NAME}" -v total="${#INVOICES[@]}" \
-        '{printf "\033[2K\rdownload \"%s\", total: %d, current: %d", name, total, $1; fflush(stdout)}'; echo
+        '{printf "\033[2K\rdownload \"%s\", total: %d, current: %d", name, total, $1; fflush(stdout)}
+	 END {if (NR>0) printf "\n"}'
   fi
 }
 
