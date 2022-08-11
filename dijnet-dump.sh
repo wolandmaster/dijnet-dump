@@ -37,7 +37,7 @@ unaccent() {
 
 dijnet() {
   URL_POSTFIX="$1"; shift; local IFS=""; POST_DATA="$*"
-  wget --quiet --output-document=- --post-data "${POST_DATA}" --no-check-certificate \
+  wget --quiet --user-agent "${USER_AGENT}" --output-document=- --post-data "${POST_DATA}" --no-check-certificate \
        --load-cookies "${COOKIES}" --save-cookies "${COOKIES}" --keep-session-cookies \
        "${DIJNET_BASE_URL}/${URL_POSTFIX}"
 }
@@ -52,7 +52,7 @@ download_internal_links() {
   LINKS=$(tr -d '\n' <<<"${HREFS}" | sed -E $'s/[[:space:]]*href="//g;s/"[[:space:]]*/\\\n/g')
   for LINK in ${LINKS}; do
     grep -q "^http" <<<"${LINK}" && continue
-    wget --quiet --load-cookies "${COOKIES}" --content-disposition --no-clobber --no-check-certificate \
+    wget --quiet --user-agent "${USER_AGENT}" --load-cookies "${COOKIES}" --content-disposition --no-clobber --no-check-certificate \
          --directory-prefix "${FIXED_TARGET_FOLDER}" "${DIJNET_BASE_URL}/ekonto/control/${LINK}"
   done
 }
