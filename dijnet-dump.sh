@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # dijnet.hu invoice downloader [https://github.com/wolandmaster/dijnet-dump]
-# Copyright (c) 2016-2021 Sandor Balazsi and others
+# Copyright (c) 2016-2022 Sandor Balazsi and others
 # This software may be distributed under the terms of the Apache 2.0 license
 
 if ! type xmllint wget xxd &>/dev/null || [[ ${BASH_VERSINFO[0]} < 4 ]]; then
@@ -9,7 +9,7 @@ if ! type xmllint wget xxd &>/dev/null || [[ ${BASH_VERSINFO[0]} < 4 ]]; then
   echo "- fedora: dnf install wget vim-common findutils" >&2
   echo "- openwrt/lede: opkg install bash wget xxd libxml2-utils" >&2
   echo "- macos: brew install bash wget libxml2" >&2
-  echo "- cygwin: setup-x86.exe -qP wget xxd libxml2" >&2
+  echo "- cygwin: setup-x86.exe -qP wget,xxd,libxml2" >&2
   exit 1
 fi
 
@@ -44,16 +44,19 @@ dijnet() {
 
 invoice_data() {
   local IFS="|"; FILTER=$(sed 's/|/" or text()="/g' <<<"$*")
-  unaccent <<<"${DOWNLOAD_PAGE}" | xpath '//label[text()="'"${FILTER}"'"]/../following-sibling::td[1]//text()'
+  VALUE_ELEMENT=$(unaccent <<<"${DOWNLOAD_PAGE}" | xpath '//label[text()="'"${FILTER}"'"]/../following-sibling::div')
+  VALUE=$(xpath 'string(//input/@value)' <<<"${VALUE_ELEMENT}")
+  [[ -z "${VALUE}" ]] && VALUE=$(xpath '//a/text()' <<<"${VALUE_ELEMENT}")
+  echo "${VALUE}"
 }
 
 download_internal_links() {
-  HREFS=$(xpath '//a[contains(@class, "xt_link__download")]/@href')
+  HREFS=$(xpath '//div[contains(@class, "col-11")]/a/@href')
   LINKS=$(tr -d '\n' <<<"${HREFS}" | sed -E $'s/[[:space:]]*href="//g;s/"[[:space:]]*/\\\n/g')
   for LINK in ${LINKS}; do
     grep -q "^http" <<<"${LINK}" && continue
-    wget --quiet --user-agent "${USER_AGENT}" --load-cookies "${COOKIES}" --content-disposition --no-clobber --no-check-certificate \
-         --directory-prefix "${FIXED_TARGET_FOLDER}" "${DIJNET_BASE_URL}/ekonto/control/${LINK}"
+    wget --quiet --user-agent "${USER_AGENT}" --load-cookies "${COOKIES}" --content-disposition --no-clobber \
+         --no-check-certificate --directory-prefix "${FIXED_TARGET_FOLDER}" "${DIJNET_BASE_URL}/ekonto/control/${LINK}"
   done
 }
 
@@ -85,11 +88,13 @@ COOKIES=$(mktemp)
 trap "rm ${COOKIES}" EXIT
 
 printf "login... "
-LOGIN_PAGE=$(dijnet "ekonto/login/login_check_password" \
-  "vfw_form=login_check_password&username=${DIJNET_USERNAME}&password=${DIJNET_PASSWORD}")
-if ! grep -qi "Bejelentkezesi nev: <strong>${DIJNET_USERNAME}</strong>" <(unaccent <<<"${LOGIN_PAGE}"); then
-  LOGIN_ERROR=$(unaccent <<<"${LOGIN_PAGE}" | xpath '//div[contains(@class, "alert")]/strong/text()')
+LOGIN_PAGE=$(dijnet "ekonto/login/login_check_ajax" "username=${DIJNET_USERNAME}&password=${DIJNET_PASSWORD}")
+if ! grep -qi '"success": true' <<<"${LOGIN_PAGE}"; then
+  LOGIN_ERROR=$(unaccent <<<"${LOGIN_PAGE}" | sed -En 's/[[:space:]]*"error": "([^"]*)"/\1/p')
   die "\nERROR: login failed (${LOGIN_ERROR})"
+else
+  REDIRECT_URL=$(sed -En 's/[[:space:]]*"url": "\/([^"]*)"/\1/p' <<<"${LOGIN_PAGE}")
+  MAIN_PAGE=$(dijnet "${REDIRECT_URL}")
 fi
 echo OK
 
@@ -98,18 +103,19 @@ PROVIDERS_PAGE=$(dijnet "ekonto/control/szamla_search")
 grep -c "sopts.add" <<<"${PROVIDERS_PAGE}" || die "ERROR: not able to detect service providers"
 type pv &>/dev/null || echo "hint: install \"pv\" package for a nice progress bar"
 
-sed -En 's/.*var ropts = \[(.*)\];.*/\1/p' <<<"${PROVIDERS_PAGE}" | sed $'s/}, {/}\\\n{/g' \
+unaccent <<<"${PROVIDERS_PAGE}" | sed -En 's/.*var ropts = \[(.*)\];.*/\1/p' | sed $'s/}, {/}\\\n{/g' \
 | while read -r PROVIDER_JSON; do
   declare -A PROVIDER=$(sed -E 's/"([^"]+)":([^,}]+),?/ [\1]=\2/g;s/^\{/(/;s/}$/ )/' <<<"${PROVIDER_JSON}")
-  INVOICE_PROVIDER=$(unaccent <<<"${PROVIDER["szlaszolgnev"]}" | sed 's/\.$//')
-  INVOICE_PROVIDER_ALIAS=$(unaccent <<<"${PROVIDER["alias"]}" | sed 's/^null$//')
+  INVOICE_PROVIDER=$(sed 's/\.$//' <<<"${PROVIDER["szlaszolgnev"]}")
+  INVOICE_PROVIDER_ALIAS=$(sed 's/^null$//' <<<"${PROVIDER["alias"]}")
   INVOICES_PAGE=$(dijnet "ekonto/control/szamla_search_submit" "vfw_form=szamla_search_submit" \
-    "&vfw_coll=szamla_search_params&regszolgid=${PROVIDER["regszolgid"]}&datumtol=${FROM_DATE}&datumig=${TILL_DATE}")
+    "&vfw_coll=szamla_search_params&regszolgid=${PROVIDER["regszolgid"]}" \
+    "&datumtol=$(sed 's/\./-/g' <<<"${FROM_DATE}")&datumig=$(sed 's/\./-/g' <<<"${TILL_DATE}")")
   IFS=$'\n' INVOICES=($(sed -En "s/.*clickSzamlaGTM\('szamla_select', ([0-9]+).*/\1/p" <<<"${INVOICES_PAGE}"))
 
   for INVOICE_INDEX in ${INVOICES[@]}; do
     INVOICE_PAGE=$(dijnet "ekonto/control/szamla_select" "vfw_coll=szamla_list&vfw_rowid=${INVOICE_INDEX}")
-    grep -q 'href="szamla_letolt"' <<<"${INVOICE_PAGE}" || die "ERROR: not able to select invoice"
+    grep -q 'href="/ekonto/control/szamla_letolt"' <<<"${INVOICE_PAGE}" || die "ERROR: not able to select invoice"
     DOWNLOAD_PAGE=$(dijnet "ekonto/control/szamla_letolt")
     INVOICE_NUMBER=$(invoice_data "Szamlaszam:" | sed 's/\//_/g')
     INVOICE_ISSUER_ID=$(invoice_data "Szamlakibocsatoi azonosito:")

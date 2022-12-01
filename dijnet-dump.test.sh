@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # dijnet.hu invoice downloader tester [https://github.com/wolandmaster/dijnet-dump]
-# Copyright (c) 2016-2021 Sandor Balazsi and others
+# Copyright (c) 2016-2022 Sandor Balazsi and others
 # This software may be distributed under the terms of the Apache 2.0 license
 
 banner() {
