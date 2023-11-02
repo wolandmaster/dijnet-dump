@@ -111,7 +111,7 @@ unaccent <<<"${PROVIDERS_PAGE}" | sed -En 's/.*var ropts = \[(.*)\];.*/\1/p' | s
   INVOICES_PAGE=$(dijnet "ekonto/control/szamla_search_submit" "vfw_form=szamla_search_submit" \
     "&vfw_coll=szamla_search_params&regszolgid=${PROVIDER["regszolgid"]}" \
     "&datumtol=$(sed 's/\./-/g' <<<"${FROM_DATE}")&datumig=$(sed 's/\./-/g' <<<"${TILL_DATE}")")
-  IFS=$'\n' INVOICES=($(sed -En "s/.*clickSzamlaGTM\('szamla_select', ([0-9]+).*/\1/p" <<<"${INVOICES_PAGE}"))
+  IFS=$'\n' INVOICES=($(sed -En "s/.*clickSzamla\('szamla_select', ([0-9]+).*/\1/p" <<<"${INVOICES_PAGE}"))
 
   for INVOICE_INDEX in ${INVOICES[@]}; do
     INVOICE_PAGE=$(dijnet "ekonto/control/szamla_select" "vfw_coll=szamla_list&vfw_rowid=${INVOICE_INDEX}")
