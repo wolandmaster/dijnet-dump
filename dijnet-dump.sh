@@ -36,9 +36,9 @@ unaccent() {
 }
 
 dijnet() {
-  URL_POSTFIX="$1"; shift; local IFS=""; POST_DATA="$*"
-  wget --quiet --user-agent "${USER_AGENT}" --output-document=- --post-data "${POST_DATA}" --no-check-certificate \
-       --load-cookies "${COOKIES}" --save-cookies "${COOKIES}" --keep-session-cookies \
+  URL_POSTFIX="$1"; shift
+  wget --quiet --user-agent="" --output-document=- --no-check-certificate \
+       --load-cookies="${COOKIES}" --save-cookies="${COOKIES}" --keep-session-cookies $* \
        "${DIJNET_BASE_URL}/${URL_POSTFIX}"
 }
 
@@ -88,7 +88,7 @@ COOKIES=$(mktemp)
 trap "rm ${COOKIES}" EXIT
 
 printf "login... "
-LOGIN_PAGE=$(dijnet "ekonto/login/login_check_ajax" "username=${DIJNET_USERNAME}&password=${DIJNET_PASSWORD}")
+LOGIN_PAGE=$(dijnet "ekonto/login/login_check_ajax" --post-data "username=${DIJNET_USERNAME}&password=${DIJNET_PASSWORD}")
 if ! grep -qi '"success": true' <<<"${LOGIN_PAGE}"; then
   LOGIN_ERROR=$(unaccent <<<"${LOGIN_PAGE}" | sed -En 's/[[:space:]]*"error": "([^"]*)"/\1/p')
   die "\nERROR: login failed (${LOGIN_ERROR})"
@@ -105,16 +105,18 @@ type pv &>/dev/null || echo "hint: install \"pv\" package for a nice progress ba
 
 unaccent <<<"${PROVIDERS_PAGE}" | sed -En 's/.*var ropts = \[(.*)\];.*/\1/p' | sed $'s/}, {/}\\\n{/g' \
 | while read -r PROVIDER_JSON; do
+  INVOICE_SEARCH=$(dijnet "ekonto/control/szamla_search")
+  VFW_TOKEN=$(xpath 'string(//input[@name="vfw_token"]/@value)' <<<"${INVOICE_SEARCH}")
   declare -A PROVIDER=$(sed -E 's/"([^"]+)":([^,}]+),?/ [\1]=\2/g;s/^\{/(/;s/}$/ )/' <<<"${PROVIDER_JSON}")
   INVOICE_PROVIDER=$(sed 's/\.$//' <<<"${PROVIDER["szlaszolgnev"]}")
   INVOICE_PROVIDER_ALIAS=$(sed 's/^null$//' <<<"${PROVIDER["alias"]}")
-  INVOICES_PAGE=$(dijnet "ekonto/control/szamla_search_submit" "vfw_form=szamla_search_submit" \
-    "&vfw_coll=szamla_search_params&regszolgid=${PROVIDER["regszolgid"]}" \
-    "&datumtol=$(sed 's/\./-/g' <<<"${FROM_DATE}")&datumig=$(sed 's/\./-/g' <<<"${TILL_DATE}")")
+  INVOICES_PAGE=$(dijnet "ekonto/control/szamla_search_submit" --post-data "vfw_form=szamla_search_submit"`
+    `"&vfw_token=${VFW_TOKEN}&vfw_coll=szamla_search_params&regszolgid=${PROVIDER["regszolgid"]}"`
+    `"&datumtol=$(sed 's/\./-/g' <<<"${FROM_DATE}")&datumig=$(sed 's/\./-/g' <<<"${TILL_DATE}")")
   IFS=$'\n' INVOICES=($(sed -En "s/.*clickSzamla\('szamla_select', ([0-9]+).*/\1/p" <<<"${INVOICES_PAGE}"))
 
   for INVOICE_INDEX in ${INVOICES[@]}; do
-    INVOICE_PAGE=$(dijnet "ekonto/control/szamla_select" "vfw_coll=szamla_list&vfw_rowid=${INVOICE_INDEX}")
+    INVOICE_PAGE=$(dijnet "ekonto/control/szamla_select?vfw_coll=szamla_list&vfw_rowid=${INVOICE_INDEX}")
     grep -q 'href="/ekonto/control/szamla_letolt"' <<<"${INVOICE_PAGE}" || die "ERROR: not able to select invoice"
     DOWNLOAD_PAGE=$(dijnet "ekonto/control/szamla_letolt")
     INVOICE_NUMBER=$(invoice_data "Szamlaszam:" | sed 's/\//_/g')
@@ -137,4 +139,3 @@ unaccent <<<"${PROVIDERS_PAGE}" | sed -En 's/.*var ropts = \[(.*)\];.*/\1/p' | s
     INVOICE_LIST_PAGE=$(dijnet "ekonto/control/szamla_list")
   done | progress || exit 1
 done
-
