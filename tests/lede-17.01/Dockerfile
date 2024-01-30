@@ -3,7 +3,9 @@ FROM alpine as builder
 WORKDIR /work
 RUN wget -qO rootfs.tar.gz \
     https://archive.openwrt.org/releases/17.01.7/targets/x86/64/lede-17.01.7-x86-64-generic-rootfs.tar.gz \
-    && mkdir rootfs && tar xf rootfs.tar.gz -C rootfs && rm rootfs.tar.gz
+    && mkdir rootfs && tar xf rootfs.tar.gz -C rootfs && rm rootfs.tar.gz \
+    && sed -i 's/downloads.lede-project.org/archive.openwrt.org/g' rootfs/etc/opkg/distfeeds.conf \
+    && sed -i '/check_signature/ s/^#*/# /' rootfs/etc/opkg.conf
 
 
 FROM scratch

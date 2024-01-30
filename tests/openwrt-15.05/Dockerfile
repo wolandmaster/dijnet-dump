@@ -3,7 +3,8 @@ FROM alpine as builder
 WORKDIR /work
 RUN wget -qO rootfs.tar.gz \
     https://archive.openwrt.org/chaos_calmer/15.05.1/x86/64/openwrt-15.05.1-x86-64-rootfs.tar.gz \
-    && mkdir rootfs && tar xf rootfs.tar.gz -C rootfs && rm rootfs.tar.gz
+    && mkdir rootfs && tar xf rootfs.tar.gz -C rootfs && rm rootfs.tar.gz \
+    && sed -i 's/downloads.openwrt.org/archive.openwrt.org/g' rootfs/etc/opkg/distfeeds.conf
 
 
 FROM scratch
