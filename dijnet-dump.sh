@@ -55,8 +55,8 @@ download_internal_links() {
   LINKS=$(tr -d '\n' <<<"${HREFS}" | sed -E $'s/[[:space:]]*href="//g;s/"[[:space:]]*/\\\n/g')
   for LINK in ${LINKS}; do
     grep -q "^http" <<<"${LINK}" && continue
-    wget --quiet --user-agent "${USER_AGENT}" --load-cookies "${COOKIES}" --content-disposition --no-clobber \
-         --no-check-certificate --directory-prefix "${FIXED_TARGET_FOLDER}" "${DIJNET_BASE_URL}/ekonto/control/${LINK}"
+    wget --quiet --user-agent="" --load-cookies="${COOKIES}" --content-disposition --no-clobber \
+         --no-check-certificate --directory-prefix="${FIXED_TARGET_FOLDER}" "${DIJNET_BASE_URL}/ekonto/control/${LINK}"
   done
 }
 
